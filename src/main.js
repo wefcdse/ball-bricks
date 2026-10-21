@@ -1,19 +1,22 @@
 import * as THREE from 'three';
 import RAPIER from '../vendor/rapier.js';
+import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
 
 const CONFIG = {
-  layout: 'pyramid',
+  layout: 'wall',
   pyramid: { base: 4, layers: 4 },
-  wall: { cols: 7, rows: 5 },
-  brick: { w: 0.8, h: 0.34, d: 0.4, gap: 0.012, mass: 1.1 },
+  wall: { cols: 12, rows: 40, soldierBase: true },
+  stand: { height: 0.95, thickness: 0.12, margin: 0.35, depthMargin: 0.35, legWidth: 0.18 },
+  backWall: { z: -6, width: 90, height: 24, thickness: 1 },
+  brick: { w: 0.48, h: 0.106, d: 0.23, gap: 0.012, mass: 0.45 },
   ball: { radius: 0.16, mass: 4, minSpeed: 15, maxSpeed: 32, chargeTime: 1.0 },
-  camera: { height: 1.62, z: 4.6, fov: 72, pitch: -0.11 },
+  camera: { height: 1.62, z: 4.6, fov: 72, pitch: 0.1 },
   targetZ: -1.9,
   maxBalls: 14,
   ballLife: 9,
 };
 
-const PALETTE = ['#7aa7e0', '#7ec8b0', '#ffc857', '#ff8c69', '#9b8cff'];
+const PALETTE = ['#b5533c', '#a94b35', '#c0644b', '#9c4530', '#b85b43', '#a85642'];
 
 const overlay = document.getElementById('overlay');
 const startBtn = document.getElementById('startBtn');
@@ -110,7 +113,77 @@ throwLine.rotation.x = -Math.PI / 2;
 throwLine.position.set(0, 0.004, 3.75);
 scene.add(throwLine);
 
-const brickGeo = new THREE.BoxGeometry(CONFIG.brick.w, CONFIG.brick.h, CONFIG.brick.d);
+function makeWallTexture() {
+  const size = 512;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d');
+  const grd = ctx.createLinearGradient(0, 0, 0, size);
+  grd.addColorStop(0, '#f7f2e9');
+  grd.addColorStop(1, '#e4dbc9');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = 'rgba(160, 145, 125, 0.05)';
+  for (let i = 0; i < 900; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const r = Math.random() * 1.6 + 0.4;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const BW = CONFIG.backWall;
+const backWall = new THREE.Mesh(
+  new THREE.BoxGeometry(BW.width, BW.height, BW.thickness),
+  new THREE.MeshStandardMaterial({ map: makeWallTexture(), roughness: 0.96, metalness: 0 }),
+);
+backWall.position.set(0, BW.height / 2, BW.z - BW.thickness / 2);
+backWall.receiveShadow = true;
+scene.add(backWall);
+
+const baseboard = new THREE.Mesh(
+  new THREE.BoxGeometry(BW.width, 0.3, 0.08),
+  new THREE.MeshStandardMaterial({ color: '#e2d9ca', roughness: 0.9 }),
+);
+baseboard.position.set(0, 0.15, BW.z + 0.02);
+baseboard.receiveShadow = true;
+scene.add(baseboard);
+
+function makeBrickTexture() {
+  const w = 256;
+  const h = 128;
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#e8e1d8';
+  ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 2600; i++) {
+    const v = Math.floor(120 + Math.random() * 100);
+    ctx.fillStyle = `rgba(${v},${v - 10},${v - 20},${0.04 + Math.random() * 0.08})`;
+    const x = Math.random() * w;
+    const y = Math.random() * h;
+    const s = 0.6 + Math.random() * 1.8;
+    ctx.fillRect(x, y, s, s);
+  }
+  ctx.strokeStyle = 'rgba(90, 55, 40, 0.16)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(1.5, 1.5, w - 3, h - 3);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+
+const brickTexture = makeBrickTexture();
+const brickGeo = new RoundedBoxGeometry(
+  CONFIG.brick.w, CONFIG.brick.h, CONFIG.brick.d, 2, 0.008,
+);
 const ballGeo = new THREE.SphereGeometry(CONFIG.ball.radius, 24, 18);
 const ballMat = new THREE.MeshStandardMaterial({
   color: '#ff6b57', roughness: 0.4, metalness: 0.05,
@@ -254,7 +327,7 @@ function updateAimFromScreen(clientX, clientY) {
   camera.updateMatrixWorld();
   raycaster.setFromCamera(mouseNdc, camera);
   const targets = bricks.map((b) => b.mesh);
-  targets.push(ground);
+  targets.push(ground, backWall, ...standMeshes);
   const hits = raycaster.intersectObjects(targets, false);
   if (hits.length > 0) {
     const hit = hits[0];
@@ -281,16 +354,19 @@ function buildLayout() {
   const { w, h, d } = CONFIG.brick;
   const gap = CONFIG.brick.gap;
   const z0 = CONFIG.targetZ;
+  const baseY = CONFIG.stand.height + 0.002;
+  const wallBaseY = CONFIG.stand.height + (CONFIG.wall.soldierBase ? w : 0) + 0.006;
 
   if (CONFIG.layout === 'wall') {
     const { cols, rows } = CONFIG.wall;
     for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
+      const n = cols - (r % 2);
+      for (let c = 0; c < n; c++) {
         layout.push({
-          x: (c - (cols - 1) / 2) * (w + gap),
-          y: h / 2 + r * (h + gap),
+          x: (c - (n - 1) / 2) * (w + gap),
+          y: wallBaseY + h / 2 + r * (h + gap),
           z: z0,
-          color: PALETTE[r % PALETTE.length],
+          color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
         });
       }
     }
@@ -304,9 +380,9 @@ function buildLayout() {
       for (let j = 0; j < n; j++) {
         layout.push({
           x: (i - (n - 1) / 2) * (w + gap),
-          y: h / 2 + layer * (h + gap),
+          y: baseY + h / 2 + layer * (h + gap),
           z: z0 + (j - (n - 1) / 2) * (d + gap),
-          color: PALETTE[layer % PALETTE.length],
+          color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
         });
       }
     }
@@ -314,15 +390,66 @@ function buildLayout() {
   return layout;
 }
 
-function createBrick({ x, y, z, color }) {
+const standSpecs = buildLayout();
+let standMinX = Infinity;
+let standMaxX = -Infinity;
+let standMinZ = Infinity;
+let standMaxZ = -Infinity;
+for (const s of standSpecs) {
+  standMinX = Math.min(standMinX, s.x);
+  standMaxX = Math.max(standMaxX, s.x);
+  standMinZ = Math.min(standMinZ, s.z);
+  standMaxZ = Math.max(standMaxZ, s.z);
+}
+
+const stand = {
+  cx: (standMinX + standMaxX) / 2,
+  cz: (standMinZ + standMaxZ) / 2,
+  width: (standMaxX - standMinX) + CONFIG.brick.w + CONFIG.stand.margin * 2,
+  depth: (standMaxZ - standMinZ) + CONFIG.brick.d + CONFIG.stand.depthMargin,
+  height: CONFIG.stand.height,
+  thickness: CONFIG.stand.thickness,
+  legWidth: CONFIG.stand.legWidth,
+};
+stand.legHeight = stand.height - stand.thickness;
+stand.legDepth = stand.depth - 0.12;
+stand.legX = stand.width / 2 - stand.legWidth / 2 - 0.03;
+
+const shelfMat = new THREE.MeshStandardMaterial({ color: '#c99a67', roughness: 0.82, metalness: 0 });
+const legMat = new THREE.MeshStandardMaterial({ color: '#a97b4f', roughness: 0.88, metalness: 0 });
+
+const shelfMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(stand.width, stand.thickness, stand.depth),
+  shelfMat,
+);
+shelfMesh.position.set(stand.cx, stand.height - stand.thickness / 2, stand.cz);
+shelfMesh.castShadow = true;
+shelfMesh.receiveShadow = true;
+scene.add(shelfMesh);
+
+const standMeshes = [shelfMesh];
+for (const side of [-1, 1]) {
+  const legMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(stand.legWidth, stand.legHeight, stand.legDepth),
+    legMat,
+  );
+  legMesh.position.set(stand.cx + side * stand.legX, stand.legHeight / 2, stand.cz);
+  legMesh.castShadow = true;
+  legMesh.receiveShadow = true;
+  scene.add(legMesh);
+  standMeshes.push(legMesh);
+}
+
+function createBrickBody({ x, y, z, color }, localHalf, boundHalf, rotation = null) {
   const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
     .setTranslation(x, y, z)
     .setLinearDamping(0.12)
     .setAngularDamping(0.35);
+  if (rotation) bodyDesc.setRotation(rotation);
   const body = world.createRigidBody(bodyDesc);
 
   const colliderDesc = RAPIER.ColliderDesc.cuboid(
-    CONFIG.brick.w / 2, CONFIG.brick.h / 2, CONFIG.brick.d / 2,
+    localHalf.x, localHalf.y, localHalf.z,
   )
     .setMass(CONFIG.brick.mass)
     .setFriction(0.78)
@@ -330,9 +457,11 @@ function createBrick({ x, y, z, color }) {
   world.createCollider(colliderDesc, body);
 
   const mat = new THREE.MeshStandardMaterial({
-    color, roughness: 0.62, metalness: 0.02,
+    color, map: brickTexture, roughness: 0.9, metalness: 0,
   });
-  mat.color.offsetHSL(0, 0, (Math.random() - 0.5) * 0.045);
+  mat.color.offsetHSL(
+    (Math.random() - 0.5) * 0.01, 0, (Math.random() - 0.5) * 0.07,
+  );
   const mesh = new THREE.Mesh(brickGeo, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -340,34 +469,64 @@ function createBrick({ x, y, z, color }) {
 
   const brick = {
     body, mesh, fallen: false,
+    hx: boundHalf.x, hy: boundHalf.y, hz: boundHalf.z,
     initial: new THREE.Vector3(x, y, z),
   };
   bricks.push(brick);
 }
 
+function createBrick(spec) {
+  const { w, h, d } = CONFIG.brick;
+  const half = { x: w / 2, y: h / 2, z: d / 2 };
+  createBrickBody(spec, half, half);
+}
+
+function createUpright(spec) {
+  const { w, h, d } = CONFIG.brick;
+  const localHalf = { x: w / 2, y: h / 2, z: d / 2 };
+  const boundHalf = { x: h / 2, y: w / 2, z: d / 2 };
+  const rotation = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 };
+  createBrickBody(spec, localHalf, boundHalf, rotation);
+}
+
+function createSoldierBase() {
+  const { w, h, gap } = CONFIG.brick;
+  const width = (CONFIG.wall.cols - 1) * (w + gap) + w;
+  const step = h + gap;
+  const count = Math.floor(width / step);
+  const y = CONFIG.stand.height + w / 2 + 0.001;
+  for (let i = 0; i < count; i++) {
+    createUpright({
+      x: (i - (count - 1) / 2) * step,
+      y,
+      z: CONFIG.targetZ,
+      color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+    });
+  }
+}
+
 function computeTowerBounds() {
-  const hx = CONFIG.brick.w / 2;
-  const hy = CONFIG.brick.h / 2;
-  const hz = CONFIG.brick.d / 2;
   const min = new THREE.Vector3(Infinity, Infinity, Infinity);
   const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
   for (const b of bricks) {
     const t = b.body.translation();
-    min.x = Math.min(min.x, t.x - hx);
-    min.y = Math.min(min.y, t.y - hy);
-    min.z = Math.min(min.z, t.z - hz);
-    max.x = Math.max(max.x, t.x + hx);
-    max.y = Math.max(max.y, t.y + hy);
-    max.z = Math.max(max.z, t.z + hz);
+    min.x = Math.min(min.x, t.x - b.hx);
+    min.y = Math.min(min.y, t.y - b.hy);
+    min.z = Math.min(min.z, t.z - b.hz);
+    max.x = Math.max(max.x, t.x + b.hx);
+    max.y = Math.max(max.y, t.y + b.hy);
+    max.z = Math.max(max.z, t.z + b.hz);
   }
   towerBounds = bricks.length ? { min, max } : null;
 }
 
 function settle() {
-  for (let i = 0; i < 45; i++) world.step();
+  for (let i = 0; i < 90; i++) world.step();
   for (const b of bricks) {
     const t = b.body.translation();
     b.initial.set(t.x, t.y, t.z);
+    const q = b.body.rotation();
+    b.initialQuat = { x: q.x, y: q.y, z: q.z, w: q.w };
   }
   computeTowerBounds();
 }
@@ -384,6 +543,7 @@ function clearBricks() {
 function spawnBricks() {
   clearBricks();
   for (const spec of buildLayout()) createBrick(spec);
+  if (CONFIG.layout === 'wall' && CONFIG.wall.soldierBase) createSoldierBase();
   settle();
   syncMeshes();
   setDefaultAim();
@@ -500,6 +660,7 @@ function updatePreview() {
     p.y += vy * dt;
     p.z += vz * dt;
     if (p.y < 0.04) break;
+    if (p.z <= BW.z + 0.02) break;
     if (
       towerBounds &&
       p.x > towerBounds.min.x && p.x < towerBounds.max.x &&
@@ -517,11 +678,12 @@ function updateBricks() {
     if (b.fallen) continue;
     const t = b.body.translation();
     const q = b.body.rotation();
-    const upY = 1 - 2 * (q.x * q.x + q.z * q.z);
+    const iq = b.initialQuat;
+    const alignment = Math.abs(q.x * iq.x + q.y * iq.y + q.z * iq.z + q.w * iq.w);
     const dx = t.x - b.initial.x;
     const dy = t.y - b.initial.y;
     const dz = t.z - b.initial.z;
-    if (dx * dx + dy * dy + dz * dz > 0.05 || upY < 0.8) {
+    if (dx * dx + dy * dy + dz * dz > 0.05 || alignment < 0.94) {
       b.fallen = true;
       fallenCount++;
       changed = true;
@@ -610,15 +772,15 @@ function resetGame() {
   throwsEl.textContent = '0';
 }
 
-function startGame(clientX, clientY) {
+function startGame() {
   if (!ready || started) return;
   started = true;
   overlay.classList.add('hidden');
   document.body.classList.add('playing');
-  updateAimFromScreen(clientX, clientY);
+  setDefaultAim();
 }
 
-overlay.addEventListener('click', (e) => startGame(e.clientX, e.clientY));
+overlay.addEventListener('click', startGame);
 
 resetBtn.addEventListener('click', () => {
   resetBtn.blur();
@@ -709,6 +871,7 @@ async function boot() {
     await RAPIER.init();
     world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
     world.timestep = FIXED;
+    world.integrationParameters.numSolverIterations = 8;
     eventQueue = new RAPIER.EventQueue(true);
 
     const groundBody = world.createRigidBody(
@@ -719,9 +882,45 @@ async function boot() {
       groundBody,
     );
 
+    const wallBody = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(0, BW.height / 2, BW.z - BW.thickness / 2),
+    );
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(BW.width / 2, BW.height / 2, BW.thickness / 2)
+        .setFriction(0.55)
+        .setRestitution(0.12),
+      wallBody,
+    );
+
+    const shelfBody = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(
+        stand.cx, stand.height - stand.thickness / 2, stand.cz,
+      ),
+    );
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(stand.width / 2, stand.thickness / 2, stand.depth / 2)
+        .setFriction(0.9)
+        .setRestitution(0.04),
+      shelfBody,
+    );
+
+    for (const side of [-1, 1]) {
+      const legBody = world.createRigidBody(
+        RAPIER.RigidBodyDesc.fixed().setTranslation(
+          stand.cx + side * stand.legX, stand.legHeight / 2, stand.cz,
+        ),
+      );
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(stand.legWidth / 2, stand.legHeight / 2, stand.legDepth / 2)
+          .setFriction(0.9)
+          .setRestitution(0.04),
+        legBody,
+      );
+    }
+
     spawnBricks();
     ready = true;
-    startBtn.textContent = '开始拆塔';
+    startBtn.textContent = '开始砸墙';
     animate();
   } catch (err) {
     console.error(err);
