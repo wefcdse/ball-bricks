@@ -8,6 +8,8 @@ const CONFIG = {
   wall: { cols: 9, rows: 40, soldierBase: true },
   tower: { cols: 5, cycles: 15 },
   taper: { baseCols: 10 },
+  ring: { radius: 1.05, cols: 13, rows: 20, z: -1.9 },
+  flat: { radius: 1.15, cols: 13, rows: 40, z: -1.9 },
   stand: { height: 0.95, thickness: 0.12, margin: 0.2625, depthMargin: -0.0125, legWidth: 0.18 },
   backWall: { z: -6, width: 90, height: 24, thickness: 1 },
   brick: { w: 0.48, h: 0.106, d: 0.23, gap: 0.012, mass: 0.45 },
@@ -24,7 +26,11 @@ const SCENES = {
   wall: { camera: { ...CONFIG.camera } },
   tower: { camera: { height: 2.2, z: 9.5, pitch: 0.1 } },
   taper: { camera: { height: 1.8, z: 6.0, pitch: 0.08 } },
+  ring: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
+  flat: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
 };
+
+const GROUND_SCENES = new Set(['ring', 'flat']);
 
 const overlay = document.getElementById('overlay');
 const ovTitle = document.getElementById('ovTitle');
@@ -334,7 +340,7 @@ function updateAimFromScreen(clientX, clientY) {
   camera.updateMatrixWorld();
   raycaster.setFromCamera(mouseNdc, camera);
   const targets = bricks.map((b) => b.mesh);
-  targets.push(ground, backWall, ...standMeshes);
+  targets.push(ground, backWall, ...standMeshes.filter((m) => m.visible));
   const hits = raycaster.intersectObjects(targets, false);
   if (hits.length > 0) {
     const hit = hits[0];
@@ -435,6 +441,7 @@ shelfMesh.receiveShadow = true;
 scene.add(shelfMesh);
 
 const standMeshes = [shelfMesh];
+const standBodies = [];
 for (const side of [-1, 1]) {
   const legMesh = new THREE.Mesh(
     new THREE.BoxGeometry(stand.legWidth, stand.legHeight, stand.legDepth),
@@ -611,6 +618,65 @@ function buildTaperTower() {
   }
 }
 
+function createRingBrick(spec, quat) {
+  const { w, h, d } = CONFIG.brick;
+  const localHalf = { x: w / 2, y: h / 2, z: d / 2 };
+  const boundHalf = { x: w / 2, y: d / 2, z: w / 2 };
+  createBrickBody(spec, localHalf, boundHalf, { x: quat.x, y: quat.y, z: quat.z, w: quat.w });
+}
+
+function buildRingTower() {
+  const { d, gap } = CONFIG.brick;
+  const { radius, cols, rows, z: centerZ } = CONFIG.ring;
+  const step = (Math.PI * 2) / cols;
+  const baseY = d / 2 + 0.002;
+  const qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+
+  for (let r = 0; r < rows; r++) {
+    const offset = (r % 2) * (step / 2);
+    for (let i = 0; i < cols; i++) {
+      const phi = i * step + offset;
+      const q = new THREE.Quaternion()
+        .setFromAxisAngle(UP, -phi - Math.PI / 2)
+        .multiply(qX);
+      createRingBrick({
+        x: Math.cos(phi) * radius,
+        y: baseY + r * (d + gap),
+        z: centerZ + Math.sin(phi) * radius,
+        color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      }, q);
+    }
+  }
+}
+
+function createFlatRingBrick(spec, quat) {
+  const { w, h, d } = CONFIG.brick;
+  const localHalf = { x: w / 2, y: h / 2, z: d / 2 };
+  const boundHalf = { x: w / 2, y: h / 2, z: w / 2 };
+  createBrickBody(spec, localHalf, boundHalf, { x: quat.x, y: quat.y, z: quat.z, w: quat.w });
+}
+
+function buildFlatRing() {
+  const { h, gap } = CONFIG.brick;
+  const { radius, cols, rows, z: centerZ } = CONFIG.flat;
+  const step = (Math.PI * 2) / cols;
+  const baseY = h / 2 + 0.002;
+
+  for (let r = 0; r < rows; r++) {
+    const offset = (r % 2) * (step / 2);
+    for (let i = 0; i < cols; i++) {
+      const phi = i * step + offset;
+      const q = new THREE.Quaternion().setFromAxisAngle(UP, -phi - Math.PI / 2);
+      createFlatRingBrick({
+        x: Math.cos(phi) * radius,
+        y: baseY + r * (h + gap),
+        z: centerZ + Math.sin(phi) * radius,
+        color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      }, q);
+    }
+  }
+}
+
 function computeTowerBounds() {
   const min = new THREE.Vector3(Infinity, Infinity, Infinity);
   const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
@@ -652,6 +718,10 @@ function spawnBricks() {
     buildTower();
   } else if (currentScene === 'taper') {
     buildTaperTower();
+  } else if (currentScene === 'ring') {
+    buildRingTower();
+  } else if (currentScene === 'flat') {
+    buildFlatRing();
   } else {
     for (const spec of buildLayout()) createBrick(spec);
     if (CONFIG.layout === 'wall' && CONFIG.wall.soldierBase) createSoldierBase();
@@ -901,10 +971,19 @@ function goHome() {
   document.body.classList.remove('playing');
 }
 
+function setStandVisible(visible) {
+  for (const mesh of standMeshes) mesh.visible = visible;
+  for (const entry of standBodies) {
+    const p = visible ? entry.home : { x: entry.home.x, y: -100, z: entry.home.z };
+    entry.body.setTranslation(p, true);
+  }
+}
+
 function startScene(name) {
   if (!ready || started) return;
   const scene = SCENES[name];
   if (!scene) return;
+  setStandVisible(!GROUND_SCENES.has(name));
   throwCount = 0;
   throwsEl.textContent = '0';
   if (currentScene !== name) {
@@ -1048,6 +1127,10 @@ async function boot() {
         .setRestitution(0.04),
       shelfBody,
     );
+    standBodies.push({
+      body: shelfBody,
+      home: { x: stand.cx, y: stand.height - stand.thickness / 2, z: stand.cz },
+    });
 
     for (const side of [-1, 1]) {
       const legBody = world.createRigidBody(
@@ -1061,6 +1144,10 @@ async function boot() {
           .setRestitution(0.04),
         legBody,
       );
+      standBodies.push({
+        body: legBody,
+        home: { x: stand.cx + side * stand.legX, y: stand.legHeight / 2, z: stand.cz },
+      });
     }
 
     spawnBricks();
