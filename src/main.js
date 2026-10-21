@@ -10,7 +10,7 @@ const CONFIG = {
   taper: { baseCols: 10 },
   ring: { radius: 1.05, cols: 13, rows: 20, z: -1.9 },
   flat: { radius: 1.15, cols: 13, rows: 40, z: -1.9 },
-  cans: { radius: 0.12, length: 0.34, mass: 0.35, base: 18, layers: 18, spacing: 0.276, z: -1.9 },
+  cans: { radius: 0.12, length: 0.38, mass: 0.35, base: 18, layers: 18, spacing: 0.276, z: -1.9 },
   stand: { height: 0.95, thickness: 0.12, margin: 0.2625, depthMargin: -0.0125, legWidth: 0.18 },
   backWall: { z: -6, width: 90, height: 24, thickness: 1 },
   brick: { w: 0.48, h: 0.106, d: 0.23, gap: 0.012, mass: 0.45 },
@@ -29,7 +29,7 @@ const SCENES = {
   taper: { camera: { height: 1.8, z: 6.0, pitch: 0.08 } },
   ring: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
   flat: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
-  cans: { camera: { height: 2.0, z: 5.8, pitch: 0.08 } },
+  cans: { camera: { height: 2.0, z: 6.2, pitch: 0.08 } },
 };
 
 const GROUND_SCENES = new Set(['ring', 'flat']);
@@ -207,12 +207,79 @@ const ballGeo = new THREE.SphereGeometry(CONFIG.ball.radius, 24, 18);
 const ballMat = new THREE.MeshStandardMaterial({
   color: '#ff6b57', roughness: 0.4, metalness: 0.05,
 });
-const canGeo = new THREE.CylinderGeometry(
-  CONFIG.cans.radius, CONFIG.cans.radius, CONFIG.cans.length, 24, 1,
-);
-const canMat = new THREE.MeshStandardMaterial({
-  color: '#cfd4da', roughness: 0.34, metalness: 0.45,
-});
+const canLabels = ['#b7483e', '#2f6f5c', '#3b6ea5', '#c78a33', '#6a4c93', '#b04a6b'];
+
+function makeCanLabelTexture(label) {
+  const w = 256;
+  const h = 128;
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext('2d');
+
+  const metal = ctx.createLinearGradient(0, 0, 0, h);
+  metal.addColorStop(0, '#f3f5f7');
+  metal.addColorStop(0.45, '#d3d9df');
+  metal.addColorStop(1, '#aeb6bf');
+  ctx.fillStyle = metal;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, .18)';
+  for (let i = 0; i < 18; i++) {
+    ctx.fillRect(Math.random() * w, 0, 1, h);
+  }
+
+  ctx.fillStyle = label;
+  ctx.fillRect(0, 40, w, 48);
+  ctx.fillStyle = 'rgba(255, 255, 255, .82)';
+  ctx.fillRect(0, 47, w, 2);
+  ctx.fillRect(0, 79, w, 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, .2)';
+  ctx.fillRect(0, 54, w, 18);
+  for (let i = 0; i < 5; i++) {
+    ctx.beginPath();
+    ctx.arc(26 + i * 46, 64, 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, .5)';
+    ctx.fill();
+  }
+
+  ctx.fillStyle = 'rgba(72, 82, 93, .3)';
+  ctx.fillRect(0, 3, w, 3);
+  ctx.fillRect(0, h - 6, w, 3);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+
+function makeCanGeometry() {
+  const r = CONFIG.cans.radius;
+  const h = CONFIG.cans.length;
+  const profile = [
+    new THREE.Vector2(0, -h / 2),
+    new THREE.Vector2(r * 0.7, -h / 2),
+    new THREE.Vector2(r * 0.95, -h / 2 + 0.01),
+    new THREE.Vector2(r, -h / 2 + 0.035),
+    new THREE.Vector2(r, h / 2 - 0.055),
+    new THREE.Vector2(r * 0.92, h / 2 - 0.025),
+    new THREE.Vector2(r * 0.8, h / 2),
+    new THREE.Vector2(0, h / 2),
+  ];
+  return new THREE.LatheGeometry(profile, 24);
+}
+
+const canTextures = canLabels.map((label) => makeCanLabelTexture(label));
+const canGeo = makeCanGeometry();
+
+function makeCanMaterial() {
+  const tex = canTextures[Math.floor(Math.random() * canTextures.length)];
+  return new THREE.MeshStandardMaterial({
+    map: tex,
+    metalness: 0.45 + Math.random() * 0.2,
+    roughness: 0.28 + Math.random() * 0.14,
+  });
+}
 
 const bricks = [];
 const balls = [];
@@ -705,7 +772,7 @@ function createCan({ x, y, z }) {
     body,
   );
 
-  const mesh = new THREE.Mesh(canGeo, canMat.clone());
+  const mesh = new THREE.Mesh(canGeo, makeCanMaterial());
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   scene.add(mesh);
