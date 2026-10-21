@@ -10,6 +10,7 @@ const CONFIG = {
   taper: { baseCols: 10 },
   ring: { radius: 1.05, cols: 13, rows: 20, z: -1.9 },
   flat: { radius: 1.15, cols: 13, rows: 40, z: -1.9 },
+  cans: { radius: 0.12, length: 0.34, mass: 0.35, base: 18, layers: 18, spacing: 0.276, z: -1.9 },
   stand: { height: 0.95, thickness: 0.12, margin: 0.2625, depthMargin: -0.0125, legWidth: 0.18 },
   backWall: { z: -6, width: 90, height: 24, thickness: 1 },
   brick: { w: 0.48, h: 0.106, d: 0.23, gap: 0.012, mass: 0.45 },
@@ -28,6 +29,7 @@ const SCENES = {
   taper: { camera: { height: 1.8, z: 6.0, pitch: 0.08 } },
   ring: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
   flat: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
+  cans: { camera: { height: 2.0, z: 5.8, pitch: 0.08 } },
 };
 
 const GROUND_SCENES = new Set(['ring', 'flat']);
@@ -204,6 +206,12 @@ const brickGeo = new RoundedBoxGeometry(
 const ballGeo = new THREE.SphereGeometry(CONFIG.ball.radius, 24, 18);
 const ballMat = new THREE.MeshStandardMaterial({
   color: '#ff6b57', roughness: 0.4, metalness: 0.05,
+});
+const canGeo = new THREE.CylinderGeometry(
+  CONFIG.cans.radius, CONFIG.cans.radius, CONFIG.cans.length, 24, 1,
+);
+const canMat = new THREE.MeshStandardMaterial({
+  color: '#cfd4da', roughness: 0.34, metalness: 0.45,
 });
 
 const bricks = [];
@@ -681,6 +689,51 @@ function buildFlatRing() {
   }
 }
 
+function createCan({ x, y, z }) {
+  const { radius, length, mass } = CONFIG.cans;
+  const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+    .setTranslation(x, y, z)
+    .setLinearDamping(0.12)
+    .setAngularDamping(0.25);
+  const body = world.createRigidBody(bodyDesc);
+
+  world.createCollider(
+    RAPIER.ColliderDesc.cylinder(length / 2, radius)
+      .setMass(mass)
+      .setFriction(0.55)
+      .setRestitution(0.18),
+    body,
+  );
+
+  const mesh = new THREE.Mesh(canGeo, canMat.clone());
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+
+  bricks.push({
+    body, mesh, fallen: false,
+    hx: radius, hy: length / 2, hz: radius,
+    initial: new THREE.Vector3(x, y, z),
+  });
+}
+
+function buildCanTower() {
+  const { length, base, layers, spacing, z: centerZ } = CONFIG.cans;
+  const baseY = CONFIG.stand.height + length / 2 + 0.002;
+
+  for (let layer = 0; layer < layers; layer++) {
+    const n = base - layer;
+    if (n < 1) break;
+    for (let i = 0; i < n; i++) {
+      createCan({
+        x: (i - (n - 1) / 2) * spacing,
+        y: baseY + layer * (length + 0.002),
+        z: centerZ,
+      });
+    }
+  }
+}
+
 function computeTowerBounds() {
   const min = new THREE.Vector3(Infinity, Infinity, Infinity);
   const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
@@ -726,6 +779,8 @@ function spawnBricks() {
     buildRingTower();
   } else if (currentScene === 'flat') {
     buildFlatRing();
+  } else if (currentScene === 'cans') {
+    buildCanTower();
   } else {
     for (const spec of buildLayout()) createBrick(spec);
     if (CONFIG.layout === 'wall' && CONFIG.wall.soldierBase) createSoldierBase();
