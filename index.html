@@ -48,9 +48,6 @@
     color: rgba(70, 100, 130, .55); opacity: 0; transition: .25s ease;
   }
   body.playing #brand { opacity: 1; }
-  @media (max-width: 560px) {
-    #brand { display: none; }
-  }
 
   #hint {
     position: fixed; left: 24px; bottom: 20px; font-size: 12px;
@@ -116,6 +113,7 @@
   }
   .sceneBtn:active:not(:disabled) { transform: translateY(0) scale(.98); }
   .sceneBtn:disabled { opacity: .45; cursor: wait; }
+  .sceneBtn.wide { grid-column: 1 / -1; }
   .sceneName { display: block; font-size: 17px; font-weight: 700; letter-spacing: 2px; }
   .sceneDesc { display: block; margin-top: 6px; font-size: 11px; line-height: 1.6; color: #7b95ad; }
   .card .foot { margin-top: 18px; font-size: 11px; letter-spacing: 1px; color: #93aabd; }
@@ -159,21 +157,9 @@
           <span class="sceneName">高塔</span>
           <span class="sceneDesc">竖砖与横砖交替<br>15 组直上高空</span>
         </button>
-        <button class="sceneBtn" type="button" data-scene="taper" disabled>
+        <button class="sceneBtn wide" type="button" data-scene="taper" disabled>
           <span class="sceneName">锥塔</span>
-          <span class="sceneDesc">交错上升<br>越来越窄</span>
-        </button>
-        <button class="sceneBtn" type="button" data-scene="fort" disabled>
-          <span class="sceneName">城堡</span>
-          <span class="sceneDesc">双墙拐角<br>3D 拆堡</span>
-        </button>
-        <button class="sceneBtn" type="button" data-scene="columns" disabled>
-          <span class="sceneName">柱阵</span>
-          <span class="sceneDesc">四根高柱<br>一球连锁</span>
-        </button>
-        <button class="sceneBtn" type="button" data-scene="domino" disabled>
-          <span class="sceneName">多米诺</span>
-          <span class="sceneDesc">竖砖长龙<br>一推到底</span>
+          <span class="sceneDesc">横竖交错<br>层层收窄</span>
         </button>
       </div>
       <p class="foot"><em>R</em> 重置当前场景 · 左上角也有重置按钮</p>
