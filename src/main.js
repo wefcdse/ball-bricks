@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import RAPIER from '../vendor/rapier.js';
+import RAPIER from '@dimforge/rapier3d-compat';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
 
 const CONFIG = {

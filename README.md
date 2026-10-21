@@ -15,7 +15,7 @@ python -m http.server 8000
 
 Windows 也可以直接双击 `start.bat`：它会在当前窗口运行本地服务并自动打开浏览器；窗口就是服务，关掉或按 Ctrl+C 即停止。若浏览器没有自动打开，手动访问 <http://localhost:8000/>。
 
-依赖已放在 `vendor/`，断网也能玩。
+Three.js 本地内置；Rapier 从 jsDelivr 加载，首次打开需要联网。
 
 ## 操作
 
@@ -54,7 +54,7 @@ Windows 也可以直接双击 `start.bat`：它会在当前窗口运行本地服
 ## 技术
 
 - Three.js 0.186.1
-- @dimforge/rapier3d-compat 0.21.0（WASM 内嵌在 JS 中）
+- @dimforge/rapier3d-compat 0.21.0（WASM 内嵌在 JS 中，从 jsDelivr 加载）
 - 固定 60 Hz 物理步进，砖块按位移和倾斜角度判定“倒下”
 
-以上依赖均已本地内置于 `vendor/`。
+Three.js 与 `RoundedBoxGeometry` 本地内置于 `vendor/`；Rapier 通过 importmap 从 <https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.21.0/dist/rapier.mjs> 加载。
