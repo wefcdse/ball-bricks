@@ -78,6 +78,23 @@
     transform: scaleX(0); transform-origin: left center;
   }
 
+  #sizePanel {
+    position: fixed; left: 20px; top: 50%; transform: translateY(-50%); z-index: 5;
+    width: 52px; padding: 12px 8px; border-radius: 18px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    opacity: 0; pointer-events: none; transition: opacity .25s ease;
+  }
+  body.playing #sizePanel { opacity: 1; pointer-events: auto; }
+  .sizeTitle { font-size: 10px; letter-spacing: 1px; color: #5b7690; }
+  #sizeLabel { font-size: 12px; font-weight: 600; color: #24425c; }
+  #sizeTrack { position: relative; width: 24px; height: 160px; }
+  #sizeSlider {
+    position: absolute; left: 50%; top: 50%;
+    width: 160px; height: 24px;
+    transform: translate(-50%, -50%) rotate(-90deg);
+    accent-color: #ff7a59; cursor: pointer;
+  }
+
   #overlay {
     position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     background: rgba(223, 233, 245, .52); backdrop-filter: blur(7px);
@@ -142,6 +159,14 @@
   <div id="powerWrap" class="glass">
     <div id="powerLabel"><span>力度</span><span id="powerPct">0%</span></div>
     <div id="powerTrack"><div id="powerFill"></div></div>
+  </div>
+
+  <div id="sizePanel" class="glass">
+    <span class="sizeTitle">球大小</span>
+    <span id="sizeLabel">32cm</span>
+    <div id="sizeTrack">
+      <input id="sizeSlider" type="range" min="0" max="1000" step="1" value="274" aria-label="球大小">
+    </div>
   </div>
 
   <div id="overlay">

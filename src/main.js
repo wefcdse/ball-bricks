@@ -44,6 +44,8 @@ const totalEl = document.getElementById('total');
 const throwsEl = document.getElementById('throws');
 const resetBtn = document.getElementById('resetBtn');
 const homeBtn = document.getElementById('homeBtn');
+const sizeSlider = document.getElementById('sizeSlider');
+const sizeLabel = document.getElementById('sizeLabel');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -297,6 +299,7 @@ let currentScene = 'wall';
 let charging = false;
 let chargeStart = 0;
 let power = 0;
+let ballRadius = CONFIG.ball.radius;
 
 const tmpForward = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -307,8 +310,9 @@ function aimDirection(out) {
 
 function launchPoint(out) {
   aimDirection(tmpForward);
+  const forward = 0.62 + Math.max(0, ballRadius - CONFIG.ball.radius) * 1.4;
   return out.copy(camera.position)
-    .addScaledVector(tmpForward, 0.62)
+    .addScaledVector(tmpForward, forward)
     .addScaledVector(UP, -0.38);
 }
 
@@ -763,14 +767,17 @@ function throwBall(value) {
     .setCcdEnabled(true);
   const body = world.createRigidBody(bodyDesc);
 
-  const colliderDesc = RAPIER.ColliderDesc.ball(CONFIG.ball.radius)
-    .setMass(CONFIG.ball.mass)
+  const scale = ballRadius / CONFIG.ball.radius;
+  const mass = CONFIG.ball.mass * scale * scale * scale;
+  const colliderDesc = RAPIER.ColliderDesc.ball(ballRadius)
+    .setMass(mass)
     .setFriction(0.42)
     .setRestitution(0.34)
     .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
   const collider = world.createCollider(colliderDesc, body);
 
   const mesh = new THREE.Mesh(ballGeo, ballMat);
+  mesh.scale.setScalar(scale);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   scene.add(mesh);
@@ -1010,6 +1017,16 @@ homeBtn.addEventListener('click', () => {
   homeBtn.blur();
   goHome();
 });
+
+function updateBallSize() {
+  const t = Number(sizeSlider.value) / 1000;
+  const diameterCm = 16 * Math.pow(200 / 16, t);
+  ballRadius = diameterCm / 200;
+  sizeLabel.textContent = `${Math.round(diameterCm)}cm`;
+}
+
+sizeSlider.addEventListener('input', updateBallSize);
+updateBallSize();
 
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (!e.isPrimary) return;
