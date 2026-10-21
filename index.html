@@ -48,6 +48,9 @@
     color: rgba(70, 100, 130, .55); opacity: 0; transition: .25s ease;
   }
   body.playing #brand { opacity: 1; }
+  @media (max-width: 560px) {
+    #brand { display: none; }
+  }
 
   #hint {
     position: fixed; left: 24px; bottom: 20px; font-size: 12px;
@@ -88,23 +91,33 @@
   #overlay.hidden { opacity: 0; pointer-events: none; }
   .card {
     width: min(440px, calc(100vw - 48px)); padding: 34px 36px 30px; border-radius: 26px;
-    text-align: center; background: rgba(255, 255, 255, .84);
+    text-align: center; background: #fff;
     border: 1px solid rgba(255, 255, 255, .9);
     box-shadow: 0 24px 70px rgba(40, 70, 100, .2);
+    max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain;
   }
   .card h1 { font-size: 30px; font-weight: 700; letter-spacing: 5px; color: #24425c; }
   .card .en { margin-top: 7px; font-size: 10px; letter-spacing: 5px; color: #8ba6bf; }
   .card .desc { margin-top: 22px; font-size: 13px; line-height: 2; color: #5b7690; }
   .card .desc b { color: #ff7a59; font-weight: 600; }
-  #startBtn {
-    margin-top: 26px; padding: 13px 42px; border: 0; border-radius: 999px;
-    font-family: inherit; font-size: 15px; font-weight: 600; letter-spacing: 2px;
-    color: #fff; background: #ff7a59; cursor: pointer;
-    box-shadow: 0 10px 24px rgba(255, 122, 89, .35);
-    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  .scenes {
+    margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
   }
-  #startBtn:hover { transform: translateY(-2px); background: #ff6a45; box-shadow: 0 14px 30px rgba(255, 122, 89, .42); }
-  #startBtn:active { transform: translateY(0) scale(.98); }
+  .sceneBtn {
+    appearance: none; -webkit-appearance: none; text-align: left;
+    padding: 16px 15px 14px; border-radius: 18px; cursor: pointer;
+    border: 1px solid rgba(150, 180, 210, .65);
+    background: rgba(255, 255, 255, .96); font-family: inherit; color: #24425c;
+    transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .sceneBtn:hover:not(:disabled) {
+    transform: translateY(-2px); background: rgba(255, 255, 255, .96);
+    border-color: #ff7a59; box-shadow: 0 10px 22px rgba(255, 122, 89, .16);
+  }
+  .sceneBtn:active:not(:disabled) { transform: translateY(0) scale(.98); }
+  .sceneBtn:disabled { opacity: .45; cursor: wait; }
+  .sceneName { display: block; font-size: 17px; font-weight: 700; letter-spacing: 2px; }
+  .sceneDesc { display: block; margin-top: 6px; font-size: 11px; line-height: 1.6; color: #7b95ad; }
   .card .foot { margin-top: 18px; font-size: 11px; letter-spacing: 1px; color: #93aabd; }
   .card .foot em { font-style: normal; color: #ff7a59; }
 </style>
@@ -136,13 +149,34 @@
     <div class="card">
       <h1 id="ovTitle">投球砸墙</h1>
       <div class="en">BALL &amp; BRICKS</div>
-      <p class="desc" id="ovDesc">
-        固定视角，鼠标或手指点向砖墙。<br>
-        <b>按住蓄力、拖动瞄准，松开投掷</b>，虚线会显示球的飞行路线。<br>
-        蓄力越久球越猛，试试一球拆掉整面墙。
-      </p>
-      <button id="startBtn">开始砸墙</button>
-      <p class="foot"><em>R</em> 重置砖墙 · 左上角也有重置按钮</p>
+      <p class="desc" id="ovDesc">正在加载物理引擎…</p>
+      <div class="scenes">
+        <button class="sceneBtn" type="button" data-scene="wall" disabled>
+          <span class="sceneName">砖墙</span>
+          <span class="sceneDesc">9 列 × 40 行<br>经典拆墙</span>
+        </button>
+        <button class="sceneBtn" type="button" data-scene="tower" disabled>
+          <span class="sceneName">高塔</span>
+          <span class="sceneDesc">竖砖与横砖交替<br>15 组直上高空</span>
+        </button>
+        <button class="sceneBtn" type="button" data-scene="taper" disabled>
+          <span class="sceneName">锥塔</span>
+          <span class="sceneDesc">交错上升<br>越来越窄</span>
+        </button>
+        <button class="sceneBtn" type="button" data-scene="fort" disabled>
+          <span class="sceneName">城堡</span>
+          <span class="sceneDesc">双墙拐角<br>3D 拆堡</span>
+        </button>
+        <button class="sceneBtn" type="button" data-scene="columns" disabled>
+          <span class="sceneName">柱阵</span>
+          <span class="sceneDesc">四根高柱<br>一球连锁</span>
+        </button>
+        <button class="sceneBtn" type="button" data-scene="domino" disabled>
+          <span class="sceneName">多米诺</span>
+          <span class="sceneDesc">竖砖长龙<br>一推到底</span>
+        </button>
+      </div>
+      <p class="foot"><em>R</em> 重置当前场景 · 左上角也有重置按钮</p>
     </div>
   </div>
 

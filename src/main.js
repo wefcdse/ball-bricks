@@ -6,6 +6,11 @@ const CONFIG = {
   layout: 'wall',
   pyramid: { base: 4, layers: 4 },
   wall: { cols: 9, rows: 40, soldierBase: true },
+  tower: { cols: 5, cycles: 15 },
+  taper: { baseCols: 9, layers: 15 },
+  fort: { rows: 20, xCols: 5, zCols: 6 },
+  columns: { rows: 18 },
+  domino: { count: 12, spacing: 0.24 },
   stand: { height: 0.95, thickness: 0.12, margin: 0.2625, depthMargin: -0.0125, legWidth: 0.18 },
   backWall: { z: -6, width: 90, height: 24, thickness: 1 },
   brick: { w: 0.48, h: 0.106, d: 0.23, gap: 0.012, mass: 0.45 },
@@ -18,10 +23,21 @@ const CONFIG = {
 
 const PALETTE = ['#b5533c', '#a94b35', '#c0644b', '#9c4530', '#b85b43', '#a85642'];
 
+const STAND_SCENES = new Set(['wall', 'tower', 'taper']);
+
+const SCENES = {
+  wall: { camera: { ...CONFIG.camera } },
+  tower: { camera: { height: 2.2, z: 9.5, pitch: 0.1 } },
+  taper: { camera: { height: 2.2, z: 9.5, pitch: 0.1 } },
+  fort: { camera: { x: 2.4, height: 2.0, z: 7.5, pitch: 0.06, yaw: 0.35 } },
+  columns: { camera: { height: 1.9, z: 8.0, pitch: 0.06 } },
+  domino: { camera: { height: 1.2, z: 5.8, pitch: 0.02 } },
+};
+
 const overlay = document.getElementById('overlay');
-const startBtn = document.getElementById('startBtn');
 const ovTitle = document.getElementById('ovTitle');
 const ovDesc = document.getElementById('ovDesc');
+const sceneButtons = [...document.querySelectorAll('.sceneBtn')];
 const powerWrap = document.getElementById('powerWrap');
 const powerFill = document.getElementById('powerFill');
 const powerPct = document.getElementById('powerPct');
@@ -278,6 +294,7 @@ let world = null;
 let eventQueue = null;
 let ready = false;
 let started = false;
+let currentScene = 'wall';
 let charging = false;
 let chargeStart = 0;
 let power = 0;
@@ -327,7 +344,7 @@ function updateAimFromScreen(clientX, clientY) {
   camera.updateMatrixWorld();
   raycaster.setFromCamera(mouseNdc, camera);
   const targets = bricks.map((b) => b.mesh);
-  targets.push(ground, backWall, ...standMeshes);
+  targets.push(ground, backWall, ...standMeshes.filter((m) => m.visible));
   const hits = raycaster.intersectObjects(targets, false);
   if (hits.length > 0) {
     const hit = hits[0];
@@ -428,6 +445,7 @@ shelfMesh.receiveShadow = true;
 scene.add(shelfMesh);
 
 const standMeshes = [shelfMesh];
+const standBodies = [];
 for (const side of [-1, 1]) {
   const legMesh = new THREE.Mesh(
     new THREE.BoxGeometry(stand.legWidth, stand.legHeight, stand.legDepth),
@@ -489,6 +507,24 @@ function createUpright(spec) {
   createBrickBody(spec, localHalf, boundHalf, rotation);
 }
 
+function createBrickAlongZ(spec) {
+  const { w, h, d } = CONFIG.brick;
+  const localHalf = { x: w / 2, y: h / 2, z: d / 2 };
+  const boundHalf = { x: d / 2, y: h / 2, z: w / 2 };
+  const rotation = { x: 0, y: Math.SQRT1_2, z: 0, w: Math.SQRT1_2 };
+  createBrickBody(spec, localHalf, boundHalf, rotation);
+}
+
+function createDomino(spec) {
+  const { w, h, d } = CONFIG.brick;
+  const localHalf = { x: w / 2, y: h / 2, z: d / 2 };
+  const boundHalf = { x: d / 2, y: w / 2, z: h / 2 };
+  const q = new THREE.Quaternion()
+    .setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2)
+    .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2));
+  createBrickBody(spec, localHalf, boundHalf, { x: q.x, y: q.y, z: q.z, w: q.w });
+}
+
 function createSoldierBase() {
   const { w, gap } = CONFIG.brick;
   const n = CONFIG.wall.cols;
@@ -508,6 +544,172 @@ function createSoldierBase() {
       x,
       y,
       z: CONFIG.targetZ,
+      color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+    });
+  }
+}
+
+function buildTower() {
+  const { w, h, gap } = CONFIG.brick;
+  const n = CONFIG.tower.cols;
+  const cycles = CONFIG.tower.cycles;
+  const step = w + gap;
+  const centers = [];
+  for (let c = 0; c < n; c++) {
+    centers.push((c - (n - 1) / 2) * step);
+  }
+
+  const halfUpright = h / 2;
+  const supports = [centers[0] - w / 2 + halfUpright];
+  for (let c = 0; c < n - 1; c++) {
+    supports.push((centers[c] + centers[c + 1]) / 2);
+  }
+  supports.push(centers[n - 1] + w / 2 - halfUpright);
+
+  let bottom = CONFIG.stand.height + 0.001;
+  for (let level = 0; level < cycles; level++) {
+    const uprightY = bottom + w / 2;
+    for (const x of supports) {
+      createUpright({
+        x,
+        y: uprightY,
+        z: CONFIG.targetZ,
+        color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      });
+    }
+    bottom += w;
+
+    const brickY = bottom + 0.001 + h / 2;
+    for (const x of centers) {
+      createBrick({
+        x,
+        y: brickY,
+        z: CONFIG.targetZ,
+        color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      });
+    }
+    bottom += 0.001 + h;
+  }
+}
+
+function buildTaperTower() {
+  const { w, h, gap } = CONFIG.brick;
+  const baseCols = CONFIG.taper.baseCols;
+  const layers = CONFIG.taper.layers;
+  const step = w + gap;
+  const halfUpright = h / 2;
+  const shifts = [0, step / 2, 0, -step / 2];
+
+  let bottom = CONFIG.stand.height + 0.001;
+  for (let level = 0; level < layers; level++) {
+    const plateau = Math.floor(level / 2);
+    const n = baseCols - plateau;
+    if (n < 1) break;
+    const shift = shifts[plateau % shifts.length];
+    const centers = [];
+    for (let c = 0; c < n; c++) {
+      centers.push((c - (n - 1) / 2) * step + shift);
+    }
+
+    const supports = [centers[0] - w / 2 + halfUpright];
+    for (let c = 0; c < n - 1; c++) {
+      supports.push((centers[c] + centers[c + 1]) / 2);
+    }
+    supports.push(centers[n - 1] + w / 2 - halfUpright);
+
+    const uprightY = bottom + w / 2;
+    for (const x of supports) {
+      createUpright({
+        x,
+        y: uprightY,
+        z: CONFIG.targetZ,
+        color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      });
+    }
+    bottom += w;
+
+    const brickY = bottom + 0.001 + h / 2;
+    for (const x of centers) {
+      createBrick({
+        x,
+        y: brickY,
+        z: CONFIG.targetZ,
+        color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      });
+    }
+    bottom += 0.001 + h;
+  }
+}
+
+function buildFort() {
+  const { w, h, d, gap } = CONFIG.brick;
+  const { rows, xCols, zCols } = CONFIG.fort;
+  const step = w + gap;
+  const baseY = h / 2 + 0.002;
+  const xWallZ = 2.4;
+
+  for (let r = 0; r < rows; r++) {
+    const n = xCols - (r % 2);
+    for (let c = 0; c < n; c++) {
+      createBrick({
+        x: (c - (n - 1) / 2) * step,
+        y: baseY + r * (h + gap),
+        z: xWallZ,
+        color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      });
+    }
+  }
+
+  const xHalf = ((xCols - 1) * step + w) / 2;
+  const zWallX = xHalf + d / 2;
+  const zHalf = ((zCols - 1) * step + w) / 2;
+  const zCenter = xWallZ + d / 2 - zHalf;
+
+  for (let r = 0; r < rows; r++) {
+    const n = zCols - (r % 2);
+    for (let c = 0; c < n; c++) {
+      createBrickAlongZ({
+        x: zWallX,
+        y: baseY + r * (h + gap),
+        z: zCenter + (c - (n - 1) / 2) * step,
+        color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      });
+    }
+  }
+}
+
+function buildColumns() {
+  const { w, h, gap } = CONFIG.brick;
+  const rows = CONFIG.columns.rows;
+  const baseY = h / 2 + 0.002;
+  const spots = [
+    { x: -1.2, z: 2.6 },
+    { x: -0.4, z: 1.7 },
+    { x: 0.4, z: 2.6 },
+    { x: 1.2, z: 1.7 },
+  ];
+  for (const spot of spots) {
+    for (let r = 0; r < rows; r++) {
+      createBrick({
+        x: spot.x,
+        y: baseY + r * (h + gap),
+        z: spot.z,
+        color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      });
+    }
+  }
+}
+
+function buildDomino() {
+  const { w } = CONFIG.brick;
+  const count = CONFIG.domino.count;
+  const spacing = CONFIG.domino.spacing;
+  const baseY = w / 2 + 0.001;
+  for (let i = 0; i < count; i++) {
+    createDomino({
+      x: Math.sin(i * 0.9) * 0.1,
+      y: baseY,
+      z: 3.4 - i * spacing,
       color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
     });
   }
@@ -550,8 +752,20 @@ function clearBricks() {
 
 function spawnBricks() {
   clearBricks();
-  for (const spec of buildLayout()) createBrick(spec);
-  if (CONFIG.layout === 'wall' && CONFIG.wall.soldierBase) createSoldierBase();
+  if (currentScene === 'tower') {
+    buildTower();
+  } else if (currentScene === 'taper') {
+    buildTaperTower();
+  } else if (currentScene === 'fort') {
+    buildFort();
+  } else if (currentScene === 'columns') {
+    buildColumns();
+  } else if (currentScene === 'domino') {
+    buildDomino();
+  } else {
+    for (const spec of buildLayout()) createBrick(spec);
+    if (CONFIG.layout === 'wall' && CONFIG.wall.soldierBase) createSoldierBase();
+  }
   settle();
   syncMeshes();
   setDefaultAim();
@@ -780,15 +994,40 @@ function resetGame() {
   throwsEl.textContent = '0';
 }
 
-function startGame() {
+function applyCamera(spec) {
+  camera.position.set(spec.x ?? 0, spec.height, spec.z);
+  camera.rotation.y = spec.yaw ?? 0;
+  camera.rotation.x = spec.pitch;
+  camera.updateMatrixWorld();
+}
+
+function setStandVisible(visible) {
+  for (const mesh of standMeshes) mesh.visible = visible;
+  for (const entry of standBodies) {
+    const p = visible ? entry.home : { x: entry.home.x, y: -100, z: entry.home.z };
+    entry.body.setTranslation(p, true);
+  }
+}
+
+function startScene(name) {
   if (!ready || started) return;
+  const scene = SCENES[name];
+  if (!scene) return;
+  setStandVisible(STAND_SCENES.has(name));
+  if (currentScene !== name) {
+    currentScene = name;
+    spawnBricks();
+  }
+  applyCamera(scene.camera);
   started = true;
   overlay.classList.add('hidden');
   document.body.classList.add('playing');
   setDefaultAim();
 }
 
-overlay.addEventListener('click', startGame);
+for (const btn of sceneButtons) {
+  btn.addEventListener('click', () => startScene(btn.dataset.scene));
+}
 
 resetBtn.addEventListener('click', () => {
   resetBtn.blur();
@@ -911,6 +1150,10 @@ async function boot() {
         .setRestitution(0.04),
       shelfBody,
     );
+    standBodies.push({
+      body: shelfBody,
+      home: { x: stand.cx, y: stand.height - stand.thickness / 2, z: stand.cz },
+    });
 
     for (const side of [-1, 1]) {
       const legBody = world.createRigidBody(
@@ -924,19 +1167,23 @@ async function boot() {
           .setRestitution(0.04),
         legBody,
       );
+      standBodies.push({
+        body: legBody,
+        home: { x: stand.cx + side * stand.legX, y: stand.legHeight / 2, z: stand.cz },
+      });
     }
 
     spawnBricks();
     ready = true;
-    startBtn.textContent = '开始砸墙';
+    ovDesc.innerHTML = '选择要砸的场景 · 点击卡片开始<br><b>按住蓄力、拖动瞄准，松开投掷</b>';
+    for (const btn of sceneButtons) btn.disabled = false;
     animate();
   } catch (err) {
     console.error(err);
     ovTitle.textContent = '加载失败';
     ovDesc.textContent = '物理引擎初始化失败，请通过本地 HTTP 服务打开本页（见 README）。';
-    startBtn.style.display = 'none';
+    for (const btn of sceneButtons) btn.disabled = true;
   }
 }
 
-startBtn.textContent = '加载中…';
 boot();
