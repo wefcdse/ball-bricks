@@ -1159,7 +1159,7 @@ function updateBallSize() {
   const t = Number(sizeSlider.value) / 1000;
   const diameterCm = 16 * Math.pow(200 / 16, t);
   ballRadius = diameterCm / 200;
-  sizeLabel.textContent = `${Math.round(diameterCm)}cm`;
+  sizeLabel.textContent = `${Math.round(diameterCm)}`;
 }
 
 sizeSlider.addEventListener('input', updateBallSize);

@@ -59,14 +59,16 @@
 
   #statsWrap {
     position: fixed; left: 20px; bottom: 20px; z-index: 4;
+    padding: 7px 10px; border-radius: 12px; font-size: 11px; gap: 4px;
     opacity: 0; transform: translateY(8px); transition: .25s ease; pointer-events: none;
   }
   body.playing #statsWrap { opacity: 1; transform: none; }
-  #statsWrap.compact { left: 14px; bottom: 14px; padding: 8px 10px; border-radius: 12px; font-size: 11px; gap: 4px; }
-  #statsWrap.compact b { font-size: 17px; }
-  #statsWrap.narrow { left: 10px; bottom: 10px; padding: 6px 8px; border-radius: 10px; font-size: 10px; gap: 3px; }
-  #statsWrap.narrow b { font-size: 15px; }
-  #statsWrap.narrow .statGroup { gap: 2px; }
+  #statsWrap b { font-size: 16px; }
+  #statsWrap .statGroup { gap: 2px; }
+  #statsWrap.compact { left: 14px; bottom: 14px; padding: 6px 8px; border-radius: 10px; font-size: 10px; gap: 3px; }
+  #statsWrap.compact b { font-size: 15px; }
+  #statsWrap.narrow { left: 10px; bottom: 10px; padding: 5px 7px; border-radius: 9px; font-size: 9px; gap: 2px; }
+  #statsWrap.narrow b { font-size: 14px; }
 
   #hint {
     position: fixed; right: 24px; left: auto; bottom: 20px;
@@ -81,7 +83,7 @@
   }
 
   #powerWrap {
-    position: fixed; left: 50%; bottom: 46px; transform: translateX(-50%);
+    position: fixed; left: 50%; bottom: 78px; transform: translateX(-50%);
     width: 240px; padding: 8px 10px 10px; border-radius: 14px;
     opacity: 0; transition: opacity .12s ease; pointer-events: none;
   }
@@ -102,17 +104,16 @@
 
   #sizePanel {
     position: fixed; left: 20px; top: 50%; transform: translateY(-50%); z-index: 5;
-    width: 52px; padding: 12px 8px; border-radius: 18px;
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    width: 38px; padding: 8px 4px; border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
     opacity: 0; pointer-events: none; transition: opacity .25s ease;
   }
   body.playing #sizePanel { opacity: 1; pointer-events: auto; }
-  .sizeTitle { font-size: 10px; letter-spacing: 1px; color: #5b7690; }
-  #sizeLabel { font-size: 12px; font-weight: 600; color: #24425c; }
-  #sizeTrack { position: relative; width: 24px; height: 160px; }
+  #sizeLabel { font-size: 10px; font-weight: 600; color: #24425c; }
+  #sizeTrack { position: relative; width: 22px; height: 150px; }
   #sizeSlider {
     position: absolute; left: 50%; top: 50%;
-    width: 160px; height: 24px;
+    width: 150px; height: 22px;
     transform: translate(-50%, -50%) rotate(-90deg);
     accent-color: #ff7a59; cursor: pointer;
   }
@@ -184,8 +185,7 @@
   </div>
 
   <div id="sizePanel" class="glass">
-    <span class="sizeTitle">球大小</span>
-    <span id="sizeLabel">32cm</span>
+    <span id="sizeLabel">32</span>
     <div id="sizeTrack">
       <input id="sizeSlider" type="range" min="0" max="1000" step="1" value="274" aria-label="球大小">
     </div>
