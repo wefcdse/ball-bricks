@@ -50,6 +50,7 @@ const resetBtn = document.getElementById('resetBtn');
 const homeBtn = document.getElementById('homeBtn');
 const sizeSlider = document.getElementById('sizeSlider');
 const sizeLabel = document.getElementById('sizeLabel');
+const fullBtn = document.getElementById('fullBtn');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1164,6 +1165,28 @@ function updateBallSize() {
 
 sizeSlider.addEventListener('input', updateBallSize);
 updateBallSize();
+
+function updateFullscreenButton() {
+  fullBtn.textContent = document.fullscreenElement ? '退出全屏' : '全屏';
+}
+
+if (!document.documentElement.requestFullscreen) {
+  fullBtn.hidden = true;
+} else {
+  fullBtn.addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  });
+  document.addEventListener('fullscreenchange', updateFullscreenButton);
+  updateFullscreenButton();
+}
 
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (!e.isPrimary) return;
