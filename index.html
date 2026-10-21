@@ -47,6 +47,18 @@
   .hudBtn:hover { background: rgba(255, 255, 255, .92); color: #24425c; }
   .hudBtn:active { transform: scale(.96); }
 
+  #hud.compact { top: 14px; left: 14px; gap: 6px; }
+  #hud.compact .stat { padding: 8px 10px; border-radius: 12px; font-size: 11px; }
+  #hud.compact .stat b { font-size: 17px; }
+  #hud.compact .hudBtn { font-size: 11px; letter-spacing: .5px; }
+  #hud.compact .stats { gap: 4px; }
+  #hud.narrow { top: 10px; left: 10px; gap: 5px; }
+  #hud.narrow .stat { padding: 6px 8px; border-radius: 10px; font-size: 10px; }
+  #hud.narrow .stat b { font-size: 15px; }
+  #hud.narrow .hudBtn { font-size: 10px; letter-spacing: 0; }
+  #hud.narrow .stats { gap: 3px; }
+  #hud.narrow .statGroup { gap: 2px; }
+
   #hint {
     position: fixed; left: 24px; bottom: 20px; font-size: 12px;
     color: rgba(60, 90, 120, .66); opacity: 0; transition: .25s ease;

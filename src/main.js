@@ -35,6 +35,7 @@ const SCENES = {
 const GROUND_SCENES = new Set(['ring', 'flat']);
 
 const overlay = document.getElementById('overlay');
+const hud = document.getElementById('hud');
 const ovTitle = document.getElementById('ovTitle');
 const ovDesc = document.getElementById('ovDesc');
 const sceneButtons = [...document.querySelectorAll('.sceneBtn')];
@@ -1129,6 +1130,15 @@ function startScene(name) {
 for (const btn of sceneButtons) {
   btn.addEventListener('click', () => startScene(btn.dataset.scene));
 }
+
+function updateHudLayout() {
+  const width = window.innerWidth;
+  hud.classList.toggle('compact', width < 560);
+  hud.classList.toggle('narrow', width < 390);
+}
+
+updateHudLayout();
+window.addEventListener('resize', updateHudLayout);
 
 resetBtn.addEventListener('click', () => {
   resetBtn.blur();
