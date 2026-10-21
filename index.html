@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>投球拆塔 · Ball &amp; Bricks</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='%23ff6b57'/%3E%3C/svg%3E">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body {
+    background: #dfe9f5;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #24425c;
+    user-select: none;
+  }
+  canvas { display: block; cursor: crosshair; touch-action: none; }
+
+  .glass {
+    background: rgba(255, 255, 255, .72);
+    border: 1px solid rgba(150, 180, 210, .4);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(40, 70, 100, .12);
+  }
+
+  #hud {
+    position: fixed; top: 20px; left: 20px; display: flex; gap: 10px;
+    opacity: 0; transform: translateY(-8px); transition: .25s ease; pointer-events: none;
+  }
+  body.playing #hud { opacity: 1; transform: none; }
+  .stat {
+    padding: 10px 16px; border-radius: 14px; font-size: 12px;
+    letter-spacing: .5px; color: #5b7690;
+  }
+  .stat b { font-size: 20px; font-weight: 700; color: #24425c; margin-right: 3px; }
+  .stat i { font-style: normal; }
+  .stat.big b { color: #ff7a59; }
+  #resetBtn {
+    pointer-events: auto; cursor: pointer; appearance: none; -webkit-appearance: none;
+    font-family: inherit; font-size: 12px; letter-spacing: 1px; color: #5b7690;
+    transition: background .15s ease, color .15s ease, transform .12s ease;
+  }
+  #resetBtn:hover { background: rgba(255, 255, 255, .92); color: #24425c; }
+  #resetBtn:active { transform: scale(.96); }
+
+  #brand {
+    position: fixed; top: 22px; right: 24px; font-size: 11px; letter-spacing: 3px;
+    color: rgba(70, 100, 130, .55); opacity: 0; transition: .25s ease;
+  }
+  body.playing #brand { opacity: 1; }
+
+  #hint {
+    position: fixed; left: 24px; bottom: 20px; font-size: 12px;
+    color: rgba(60, 90, 120, .66); opacity: 0; transition: .25s ease;
+  }
+  body.playing #hint { opacity: 1; }
+  kbd {
+    display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 11px;
+    font-family: inherit; background: rgba(255, 255, 255, .8);
+    border: 1px solid rgba(140, 170, 200, .55); color: #3f5f7c;
+  }
+
+  #powerWrap {
+    position: fixed; left: 50%; bottom: 46px; transform: translateX(-50%);
+    width: 240px; padding: 8px 10px 10px; border-radius: 14px;
+    opacity: 0; transition: opacity .12s ease; pointer-events: none;
+  }
+  #powerWrap.on { opacity: 1; }
+  #powerLabel {
+    display: flex; justify-content: space-between; font-size: 10px;
+    letter-spacing: 2px; color: #6b849c; margin-bottom: 6px;
+  }
+  #powerTrack {
+    height: 8px; border-radius: 999px; overflow: hidden;
+    background: rgba(120, 150, 180, .22);
+  }
+  #powerFill {
+    height: 100%; width: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, #ffd166, #ff8c69 55%, #ff5a5f);
+    transform: scaleX(0); transform-origin: left center;
+  }
+
+  #overlay {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(223, 233, 245, .52); backdrop-filter: blur(7px);
+    transition: opacity .22s ease; z-index: 10;
+  }
+  #overlay.hidden { opacity: 0; pointer-events: none; }
+  .card {
+    width: min(440px, calc(100vw - 48px)); padding: 34px 36px 30px; border-radius: 26px;
+    text-align: center; background: rgba(255, 255, 255, .84);
+    border: 1px solid rgba(255, 255, 255, .9);
+    box-shadow: 0 24px 70px rgba(40, 70, 100, .2);
+  }
+  .card h1 { font-size: 30px; font-weight: 700; letter-spacing: 5px; color: #24425c; }
+  .card .en { margin-top: 7px; font-size: 10px; letter-spacing: 5px; color: #8ba6bf; }
+  .card .desc { margin-top: 22px; font-size: 13px; line-height: 2; color: #5b7690; }
+  .card .desc b { color: #ff7a59; font-weight: 600; }
+  #startBtn {
+    margin-top: 26px; padding: 13px 42px; border: 0; border-radius: 999px;
+    font-family: inherit; font-size: 15px; font-weight: 600; letter-spacing: 2px;
+    color: #fff; background: #ff7a59; cursor: pointer;
+    box-shadow: 0 10px 24px rgba(255, 122, 89, .35);
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  #startBtn:hover { transform: translateY(-2px); background: #ff6a45; box-shadow: 0 14px 30px rgba(255, 122, 89, .42); }
+  #startBtn:active { transform: translateY(0) scale(.98); }
+  .card .foot { margin-top: 18px; font-size: 11px; letter-spacing: 1px; color: #93aabd; }
+  .card .foot em { font-style: normal; color: #ff7a59; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+  <div id="hud">
+    <div class="stat big glass"><b id="fallen">0</b><span>/ <i id="total">0</i> 倒下</span></div>
+    <div class="stat glass"><b id="throws">0</b><span>次投掷</span></div>
+    <button id="resetBtn" class="stat glass" type="button">重置</button>
+  </div>
+
+  <div id="brand">BALL &amp; BRICKS</div>
+  <div id="hint">移动鼠标 / 拖动手指瞄准 · 按住蓄力 · 松开投掷 · <kbd>R</kbd> 重置</div>
+
+  <div id="powerWrap" class="glass">
+    <div id="powerLabel"><span>力度</span><span id="powerPct">0%</span></div>
+    <div id="powerTrack"><div id="powerFill"></div></div>
+  </div>
+
+  <div id="overlay">
+    <div class="card">
+      <h1 id="ovTitle">投球拆塔</h1>
+      <div class="en">BALL &amp; BRICKS</div>
+      <p class="desc" id="ovDesc">
+        固定视角，鼠标或手指点向砖塔。<br>
+        <b>按住蓄力、拖动瞄准，松开投掷</b>，虚线会显示球的飞行路线。<br>
+        蓄力越久球越猛，试试一球拆掉整座塔。
+      </p>
+      <button id="startBtn">开始拆塔</button>
+      <p class="foot"><em>R</em> 重置砖塔 · 左上角也有重置按钮</p>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
