@@ -5,12 +5,12 @@ import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
 const CONFIG = {
   layout: 'wall',
   pyramid: { base: 4, layers: 4 },
-  wall: { cols: 12, rows: 40, soldierBase: true },
-  stand: { height: 0.95, thickness: 0.12, margin: 0.35, depthMargin: 0.35, legWidth: 0.18 },
+  wall: { cols: 9, rows: 40, soldierBase: true },
+  stand: { height: 0.95, thickness: 0.12, margin: 0.2625, depthMargin: -0.0125, legWidth: 0.18 },
   backWall: { z: -6, width: 90, height: 24, thickness: 1 },
   brick: { w: 0.48, h: 0.106, d: 0.23, gap: 0.012, mass: 0.45 },
   ball: { radius: 0.16, mass: 4, minSpeed: 15, maxSpeed: 32, chargeTime: 1.0 },
-  camera: { height: 1.62, z: 4.6, fov: 72, pitch: 0.1 },
+  camera: { height: 1.87, z: 4.6, fov: 72, pitch: 0.1 },
   targetZ: -1.9,
   maxBalls: 14,
   ballLife: 9,
@@ -490,14 +490,22 @@ function createUpright(spec) {
 }
 
 function createSoldierBase() {
-  const { w, h, gap } = CONFIG.brick;
-  const width = (CONFIG.wall.cols - 1) * (w + gap) + w;
-  const step = h + gap;
-  const count = Math.floor(width / step);
+  const { w, gap } = CONFIG.brick;
+  const n = CONFIG.wall.cols;
+  const step = w + gap;
   const y = CONFIG.stand.height + w / 2 + 0.001;
-  for (let i = 0; i < count; i++) {
+  const centers = [];
+  for (let c = 0; c < n; c++) {
+    centers.push((c - (n - 1) / 2) * step);
+  }
+  const supports = [centers[0] - w / 2];
+  for (let c = 0; c < n - 1; c++) {
+    supports.push((centers[c] + centers[c + 1]) / 2);
+  }
+  supports.push(centers[n - 1] + w / 2);
+  for (const x of supports) {
     createUpright({
-      x: (i - (count - 1) / 2) * step,
+      x,
       y,
       z: CONFIG.targetZ,
       color: PALETTE[Math.floor(Math.random() * PALETTE.length)],

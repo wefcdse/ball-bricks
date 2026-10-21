@@ -1,6 +1,6 @@
 # 投球砸墙 · Ball & Bricks
 
-固定视角 3D 投掷砸墙小游戏。Three.js 渲染 + Rapier3D（Rust / WASM）刚体物理。红砖按真实砖块比例（约 240:115:53）等比放大，错缝砌成 12 列 × 40 行（460 块），最底下一排砖绕 Z 轴转了 90°、竖着立在架子上当支撑，上面整面墙压在它们上面；背后有一整面大挡墙接住飞出去的球。
+固定视角 3D 投掷砸墙小游戏。Three.js 渲染 + Rapier3D（Rust / WASM）刚体物理。红砖按真实砖块比例（约 240:115:53）等比放大，错缝砌成 9 列 × 40 行（340 块），底部每块底砖的头尾各有一根绕 Z 轴转 90° 的竖砖支撑，上面整面墙压在它们上面；背后有一整面大挡墙接住飞出去的球。
 
 ## 运行
 
@@ -8,10 +8,12 @@ ES Module 和 WASM 需要通过 HTTP 访问，不能直接双击 `index.html`。
 
 ```bash
 cd ball-bricks
-python -m http.server 8000
+python serve.py
 ```
 
 浏览器打开 <http://localhost:8000/>。
+
+`serve.py` 默认监听 `0.0.0.0:8000`，启动后会在控制台列出本机所有 IPv4 地址（包括 WiFi、有线、WSL/Hyper-V 等虚拟网卡）。同一局域网里的手机用对应 IP 访问即可；首次可能需要在 Windows 防火墙里允许 Python。也可以指定端口：`python serve.py 8080`。
 
 Windows 也可以直接双击 `start.bat`：它会在当前窗口运行本地服务并自动打开浏览器；窗口就是服务，关掉或按 Ctrl+C 即停止。若浏览器没有自动打开，手动访问 <http://localhost:8000/>。
 
@@ -34,11 +36,11 @@ Three.js 本地内置；Rapier 从 jsDelivr 加载，首次打开需要联网。
 | 参数 | 说明 |
 | --- | --- |
 | `layout` | `'wall'`（默认）或 `'pyramid'` |
-| `wall.cols` / `.rows` | 砖墙列数与行数，默认 12 / 40，上面 460 块，奇数行错缝 |
-| `wall.soldierBase` | 是否在底部加一排绕 Z 轴转 90° 的竖砖支撑 |
+| `wall.cols` / `.rows` | 砖墙列数与行数，默认 9 / 40，上面 340 块，奇数行错缝 |
+| `wall.soldierBase` | 是否在底部给每块底砖的头尾加竖砖支撑 |
 | `pyramid.base` / `.layers` | 可选金字塔布局，默认 4 / 4 |
 | `stand.height` / `.thickness` | 架子高度与托板厚度 |
-| `stand.margin` / `.depthMargin` | 托板比砖墙宽出 / 深出的量 |
+| `stand.margin` / `.depthMargin` | 托板比砖墙宽出 / 深出的量，可为负值 |
 | `stand.legWidth` | 架子腿宽度 |
 | `backWall.z` / `.width` / `.height` | 背后大挡墙的位置和尺寸 |
 | `brick.w` / `.h` / `.d` / `.mass` | 砖块长宽高与质量，默认 0.48 × 0.106 × 0.23 米，比例接近真实砖块 |
