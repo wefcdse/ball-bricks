@@ -37,6 +37,7 @@ const fallenEl = document.getElementById('fallen');
 const totalEl = document.getElementById('total');
 const throwsEl = document.getElementById('throws');
 const resetBtn = document.getElementById('resetBtn');
+const homeBtn = document.getElementById('homeBtn');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -889,10 +890,23 @@ function applyCamera(spec) {
   camera.updateMatrixWorld();
 }
 
+function goHome() {
+  if (!started) return;
+  cancelCharge();
+  clearBalls();
+  started = false;
+  currentScene = null;
+  aimRing.visible = false;
+  overlay.classList.remove('hidden');
+  document.body.classList.remove('playing');
+}
+
 function startScene(name) {
   if (!ready || started) return;
   const scene = SCENES[name];
   if (!scene) return;
+  throwCount = 0;
+  throwsEl.textContent = '0';
   if (currentScene !== name) {
     currentScene = name;
     spawnBricks();
@@ -911,6 +925,11 @@ for (const btn of sceneButtons) {
 resetBtn.addEventListener('click', () => {
   resetBtn.blur();
   resetGame();
+});
+
+homeBtn.addEventListener('click', () => {
+  homeBtn.blur();
+  goHome();
 });
 
 renderer.domElement.addEventListener('pointerdown', (e) => {

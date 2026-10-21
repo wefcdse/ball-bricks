@@ -35,19 +35,17 @@
   .stat b { font-size: 20px; font-weight: 700; color: #24425c; margin-right: 3px; }
   .stat i { font-style: normal; }
   .stat.big b { color: #ff7a59; }
-  #resetBtn {
+  #throws { color: #24425c; }
+  .stats { display: flex; align-items: baseline; gap: 6px; }
+  .statGroup { display: inline-flex; align-items: baseline; gap: 3px; }
+  .statSep { color: rgba(120, 150, 180, .5); }
+  .hudBtn {
     pointer-events: auto; cursor: pointer; appearance: none; -webkit-appearance: none;
     font-family: inherit; font-size: 12px; letter-spacing: 1px; color: #5b7690;
     transition: background .15s ease, color .15s ease, transform .12s ease;
   }
-  #resetBtn:hover { background: rgba(255, 255, 255, .92); color: #24425c; }
-  #resetBtn:active { transform: scale(.96); }
-
-  #brand {
-    position: fixed; top: 22px; right: 24px; font-size: 11px; letter-spacing: 3px;
-    color: rgba(70, 100, 130, .55); opacity: 0; transition: .25s ease;
-  }
-  body.playing #brand { opacity: 1; }
+  .hudBtn:hover { background: rgba(255, 255, 255, .92); color: #24425c; }
+  .hudBtn:active { transform: scale(.96); }
 
   #hint {
     position: fixed; left: 24px; bottom: 20px; font-size: 12px;
@@ -130,12 +128,15 @@
 </head>
 <body>
   <div id="hud">
-    <div class="stat big glass"><b id="fallen">0</b><span>/ <i id="total">0</i> 倒下</span></div>
-    <div class="stat glass"><b id="throws">0</b><span>次投掷</span></div>
-    <button id="resetBtn" class="stat glass" type="button">重置</button>
+    <button id="homeBtn" class="stat glass hudBtn" type="button">返回主页</button>
+    <div class="stat big glass stats">
+      <span class="statGroup"><b id="fallen">0</b><span>/ <i id="total">0</i> 倒下</span></span>
+      <span class="statSep">·</span>
+      <span class="statGroup"><b id="throws">0</b><span>次投掷</span></span>
+    </div>
+    <button id="resetBtn" class="stat glass hudBtn" type="button">重置</button>
   </div>
 
-  <div id="brand">BALL &amp; BRICKS</div>
   <div id="hint">移动鼠标 / 拖动手指瞄准 · 按住蓄力 · 松开投掷 · <kbd>R</kbd> 重置</div>
 
   <div id="powerWrap" class="glass">
