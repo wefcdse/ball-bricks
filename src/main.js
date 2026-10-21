@@ -36,6 +36,7 @@ const GROUND_SCENES = new Set(['ring', 'flat']);
 
 const overlay = document.getElementById('overlay');
 const hud = document.getElementById('hud');
+const statsWrap = document.getElementById('statsWrap');
 const ovTitle = document.getElementById('ovTitle');
 const ovDesc = document.getElementById('ovDesc');
 const sceneButtons = [...document.querySelectorAll('.sceneBtn')];
@@ -1133,8 +1134,12 @@ for (const btn of sceneButtons) {
 
 function updateHudLayout() {
   const width = window.innerWidth;
-  hud.classList.toggle('compact', width < 560);
-  hud.classList.toggle('narrow', width < 390);
+  const compact = width < 560;
+  const narrow = width < 390;
+  hud.classList.toggle('compact', compact);
+  hud.classList.toggle('narrow', narrow);
+  statsWrap.classList.toggle('compact', compact);
+  statsWrap.classList.toggle('narrow', narrow);
 }
 
 updateHudLayout();

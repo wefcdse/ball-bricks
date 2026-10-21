@@ -24,7 +24,8 @@
   }
 
   #hud {
-    position: fixed; top: 20px; left: 20px; display: flex; gap: 10px;
+    position: fixed; top: 20px; left: 20px; right: 20px;
+    display: flex; justify-content: space-between; align-items: center;
     opacity: 0; transform: translateY(-8px); transition: .25s ease; pointer-events: none;
   }
   body.playing #hud { opacity: 1; transform: none; }
@@ -47,20 +48,29 @@
   .hudBtn:hover { background: rgba(255, 255, 255, .92); color: #24425c; }
   .hudBtn:active { transform: scale(.96); }
 
-  #hud.compact { top: 14px; left: 14px; gap: 6px; }
+  #hud.compact { top: 14px; left: 14px; right: 14px; }
   #hud.compact .stat { padding: 8px 10px; border-radius: 12px; font-size: 11px; }
   #hud.compact .stat b { font-size: 17px; }
   #hud.compact .hudBtn { font-size: 11px; letter-spacing: .5px; }
-  #hud.compact .stats { gap: 4px; }
-  #hud.narrow { top: 10px; left: 10px; gap: 5px; }
+  #hud.narrow { top: 10px; left: 10px; right: 10px; }
   #hud.narrow .stat { padding: 6px 8px; border-radius: 10px; font-size: 10px; }
   #hud.narrow .stat b { font-size: 15px; }
   #hud.narrow .hudBtn { font-size: 10px; letter-spacing: 0; }
-  #hud.narrow .stats { gap: 3px; }
-  #hud.narrow .statGroup { gap: 2px; }
+
+  #statsWrap {
+    position: fixed; left: 20px; bottom: 20px; z-index: 4;
+    opacity: 0; transform: translateY(8px); transition: .25s ease; pointer-events: none;
+  }
+  body.playing #statsWrap { opacity: 1; transform: none; }
+  #statsWrap.compact { left: 14px; bottom: 14px; padding: 8px 10px; border-radius: 12px; font-size: 11px; gap: 4px; }
+  #statsWrap.compact b { font-size: 17px; }
+  #statsWrap.narrow { left: 10px; bottom: 10px; padding: 6px 8px; border-radius: 10px; font-size: 10px; gap: 3px; }
+  #statsWrap.narrow b { font-size: 15px; }
+  #statsWrap.narrow .statGroup { gap: 2px; }
 
   #hint {
-    position: fixed; left: 24px; bottom: 20px; font-size: 12px;
+    position: fixed; right: 24px; left: auto; bottom: 20px;
+    max-width: 45%; text-align: right; font-size: 12px; line-height: 1.6;
     color: rgba(60, 90, 120, .66); opacity: 0; transition: .25s ease;
   }
   body.playing #hint { opacity: 1; }
@@ -157,12 +167,13 @@
 <body>
   <div id="hud">
     <button id="homeBtn" class="stat glass hudBtn" type="button">返回主页</button>
-    <div class="stat big glass stats">
-      <span class="statGroup"><b id="fallen">0</b><span>/ <i id="total">0</i> 倒下</span></span>
-      <span class="statSep">·</span>
-      <span class="statGroup"><b id="throws">0</b><span>次投掷</span></span>
-    </div>
     <button id="resetBtn" class="stat glass hudBtn" type="button">重置</button>
+  </div>
+
+  <div id="statsWrap" class="stat big glass stats">
+    <span class="statGroup"><b id="fallen">0</b><span>/ <i id="total">0</i> 倒下</span></span>
+    <span class="statSep">·</span>
+    <span class="statGroup"><b id="throws">0</b><span>次投掷</span></span>
   </div>
 
   <div id="hint">移动鼠标 / 拖动手指瞄准 · 按住蓄力 · 松开投掷 · <kbd>R</kbd> 重置</div>
