@@ -63,6 +63,13 @@ const homeBtn = document.getElementById('homeBtn');
 const sizeSlider = document.getElementById('sizeSlider');
 const sizeLabel = document.getElementById('sizeLabel');
 const fullBtn = document.getElementById('fullBtn');
+const toolWrap = document.getElementById('toolWrap');
+const toolBtn = document.getElementById('toolBtn');
+const toolItems = [...document.querySelectorAll('.toolItem')];
+const toolButtonCanvas = document.getElementById('toolPreview');
+const toolItemCanvases = new Map(
+  toolItems.map((item) => [item.dataset.projectile, item.querySelector('canvas')]),
+);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -221,6 +228,9 @@ const brickGeo = new RoundedBoxGeometry(
 const frameMat = new THREE.MeshStandardMaterial({
   color: '#8e959c', map: brickTexture, roughness: 0.85, metalness: 0.05,
 });
+const projectileBrickMat = new THREE.MeshStandardMaterial({
+  color: '#b5533c', map: brickTexture, roughness: 0.9, metalness: 0,
+});
 const ballGeo = new THREE.SphereGeometry(CONFIG.ball.radius, 24, 18);
 const ballMat = new THREE.MeshStandardMaterial({
   color: '#ff6b57', roughness: 0.4, metalness: 0.05,
@@ -297,6 +307,76 @@ function makeCanMaterial() {
     metalness: 0.45 + Math.random() * 0.2,
     roughness: 0.28 + Math.random() * 0.14,
   });
+}
+
+const toolBallMat = new THREE.MeshStandardMaterial({
+  color: '#ff6b57', roughness: 0.42, metalness: 0.05,
+});
+const previewRenderer = new THREE.WebGLRenderer({
+  alpha: true, antialias: true, preserveDrawingBuffer: true,
+});
+previewRenderer.setPixelRatio(1);
+previewRenderer.setSize(128, 128);
+previewRenderer.setClearColor(0x000000, 0);
+
+const previewScene = new THREE.Scene();
+const previewCamera = new THREE.PerspectiveCamera(32, 1, 0.05, 10);
+previewCamera.position.set(0.7, 0.45, 0.95);
+previewCamera.lookAt(0, 0.02, 0);
+previewScene.add(new THREE.HemisphereLight('#ffffff', '#9db4cc', 2.2));
+const previewSun = new THREE.DirectionalLight('#fff3e2', 2.2);
+previewSun.position.set(1, 2, 2);
+previewScene.add(previewSun);
+
+const previewMeshes = {
+  ball: new THREE.Mesh(ballGeo, toolBallMat),
+  brick: new THREE.Mesh(brickGeo, projectileBrickMat),
+  can: new THREE.Mesh(canGeo, makeCanMaterial()),
+};
+previewMeshes.ball.scale.setScalar(1.25);
+for (const mesh of Object.values(previewMeshes)) {
+  mesh.visible = false;
+  previewScene.add(mesh);
+}
+
+function drawToolPreview(type, target, angle) {
+  for (const [key, mesh] of Object.entries(previewMeshes)) {
+    mesh.visible = key === type;
+  }
+  const mesh = previewMeshes[type];
+  if (type === 'brick') {
+    mesh.rotation.set(
+      0.25 + Math.sin(angle * 0.9 + 0.4) * 0.6,
+      angle * 1.05 + Math.cos(angle * 0.5) * 0.35,
+      0.15 + Math.sin(angle * 0.7 + 1.1) * 0.5,
+    );
+  } else if (type === 'can') {
+    mesh.rotation.set(
+      0.2 + Math.sin(angle * 0.8 + 2.1) * 0.45,
+      angle * 1.15 + Math.sin(angle * 0.45 + 0.7) * 0.5,
+      0.25 + Math.cos(angle * 0.65 + 0.2) * 0.4,
+    );
+  } else {
+    mesh.rotation.set(
+      angle * 0.9 + Math.sin(angle * 0.6) * 0.4,
+      angle * 1.2 + Math.cos(angle * 0.5 + 1) * 0.45,
+      Math.sin(angle * 0.75 + 2) * 0.5,
+    );
+  }
+  previewRenderer.render(previewScene, previewCamera);
+  const ctx = target.getContext('2d');
+  ctx.clearRect(0, 0, target.width, target.height);
+  ctx.drawImage(previewRenderer.domElement, 0, 0, target.width, target.height);
+}
+
+function updateToolPreviews(now) {
+  const angle = now * 0.0006;
+  drawToolPreview(projectileType, toolButtonCanvas, angle);
+  if (!toolWrap.classList.contains('open')) return;
+  const offsets = { ball: 0, brick: 1.1, can: 2.3 };
+  for (const [type, canvas] of toolItemCanvases) {
+    drawToolPreview(type, canvas, angle + offsets[type]);
+  }
 }
 
 const bricks = [];
@@ -394,6 +474,7 @@ let charging = false;
 let chargeStart = 0;
 let power = 0;
 let ballRadius = CONFIG.ball.radius;
+let projectileType = 'ball';
 
 const tmpForward = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -402,9 +483,15 @@ function aimDirection(out) {
   return out.set(0, 0, -1).applyQuaternion(camera.quaternion);
 }
 
+function projectileRadius() {
+  if (projectileType === 'brick') return CONFIG.brick.d / 2;
+  if (projectileType === 'can') return CONFIG.cans.radius;
+  return ballRadius;
+}
+
 function launchPoint(out) {
   aimDirection(tmpForward);
-  const forward = 0.62 + Math.max(0, ballRadius - CONFIG.ball.radius) * 1.4;
+  const forward = 0.62 + Math.max(0, projectileRadius() - CONFIG.ball.radius) * 1.4;
   return out.copy(camera.position)
     .addScaledVector(tmpForward, forward)
     .addScaledVector(UP, -0.38);
@@ -1001,20 +1088,49 @@ function throwBall(value) {
     .setLinearDamping(0.06)
     .setAngularDamping(0.24)
     .setCcdEnabled(true);
+
+  if (projectileType !== 'ball') {
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+      (Math.random() - 0.5) * 0.6,
+      (Math.random() - 0.5) * 0.6,
+      (Math.random() - 0.5) * 0.6,
+    ));
+    bodyDesc.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
+  }
   const body = world.createRigidBody(bodyDesc);
 
-  const scale = ballRadius / CONFIG.ball.radius;
-  const mass = CONFIG.ball.mass * scale * scale * scale;
-  const colliderDesc = RAPIER.ColliderDesc.ball(ballRadius)
-    .setMass(mass)
-    .setFriction(0.42)
-    .setRestitution(0.34)
+  let colliderDesc;
+  let mesh;
+  if (projectileType === 'brick') {
+    const { w, h, d, mass } = CONFIG.brick;
+    colliderDesc = RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2)
+      .setMass(mass)
+      .setFriction(0.6)
+      .setRestitution(0.1);
+    mesh = new THREE.Mesh(brickGeo, projectileBrickMat);
+  } else if (projectileType === 'can') {
+    const { radius, length, mass } = CONFIG.cans;
+    colliderDesc = RAPIER.ColliderDesc.cylinder(length / 2, radius)
+      .setMass(mass)
+      .setFriction(0.5)
+      .setRestitution(0.18);
+    mesh = new THREE.Mesh(canGeo, makeCanMaterial());
+  } else {
+    const scale = ballRadius / CONFIG.ball.radius;
+    const mass = CONFIG.ball.mass * scale * scale * scale;
+    colliderDesc = RAPIER.ColliderDesc.ball(ballRadius)
+      .setMass(mass)
+      .setFriction(0.42)
+      .setRestitution(0.34);
+    mesh = new THREE.Mesh(ballGeo, ballMat);
+    mesh.scale.setScalar(scale);
+  }
+
+  colliderDesc
     .setCollisionGroups(BALL_COLLISION_GROUPS)
     .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
   const collider = world.createCollider(colliderDesc, body);
 
-  const mesh = new THREE.Mesh(ballGeo, ballMat);
-  mesh.scale.setScalar(scale);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   scene.add(mesh);
@@ -1284,6 +1400,29 @@ function updateBallSize() {
 sizeSlider.addEventListener('input', updateBallSize);
 updateBallSize();
 
+function setProjectile(type) {
+  projectileType = type;
+  for (const item of toolItems) {
+    item.classList.toggle('active', item.dataset.projectile === type);
+  }
+}
+
+toolBtn.addEventListener('click', (event) => {
+  event.stopPropagation();
+  toolWrap.classList.toggle('open');
+});
+
+for (const item of toolItems) {
+  item.addEventListener('click', () => {
+    setProjectile(item.dataset.projectile);
+    toolWrap.classList.remove('open');
+  });
+}
+
+document.addEventListener('pointerdown', (event) => {
+  if (!toolWrap.contains(event.target)) toolWrap.classList.remove('open');
+});
+
 function updateFullscreenButton() {
   fullBtn.textContent = document.fullscreenElement ? '退出全屏' : '全屏';
 }
@@ -1383,6 +1522,7 @@ function animate() {
 
   updatePreview();
   renderer.render(scene, camera);
+  updateToolPreviews(now);
 }
 
 async function boot() {
