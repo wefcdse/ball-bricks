@@ -28,9 +28,11 @@ const PALETTE = ['#b5533c', '#a94b35', '#c0644b', '#9c4530', '#b85b43', '#a85642
 const BALL_GROUP = 0x0001;
 const FIXED_BRICK_GROUP = 0x0002;
 const STAND_GROUP = 0x0004;
+const BOMB_GROUP = 0x0008;
 const BALL_COLLISION_GROUPS = (BALL_GROUP << 16) | (0xFFFF & ~FIXED_BRICK_GROUP & ~STAND_GROUP);
 const FIXED_BRICK_COLLISION_GROUPS = (FIXED_BRICK_GROUP << 16) | (0xFFFF & ~BALL_GROUP);
 const STAND_COLLISION_GROUPS = (STAND_GROUP << 16) | (0xFFFF & ~BALL_GROUP);
+const BOMB_COLLISION_GROUPS = (BOMB_GROUP << 16) | 0xFFFF;
 
 const SCENES = {
   wall: { camera: { ...CONFIG.camera } },
@@ -309,6 +311,53 @@ function makeCanMaterial() {
   });
 }
 
+const bombMetalMat = new THREE.MeshStandardMaterial({
+  color: '#8b9299', metalness: 0.8, roughness: 0.3,
+});
+const bombGlassMat = new THREE.MeshStandardMaterial({
+  color: '#d8f6ed', transparent: true, opacity: 0.24, roughness: 0.08,
+  metalness: 0.05, depthWrite: false, side: THREE.DoubleSide,
+});
+const bombLiquidMat = new THREE.MeshStandardMaterial({
+  color: '#43e08a', emissive: '#1e9e5c', emissiveIntensity: 0.9,
+  transparent: true, opacity: 0.92, roughness: 0.22,
+});
+const bombTubeGeo = new THREE.CylinderGeometry(0.075, 0.075, 0.3, 20, 1, true);
+const bombLiquidGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.22, 20, 1);
+const bombCapGeo = new THREE.CylinderGeometry(0.086, 0.086, 0.022, 20);
+const bombRingGeo = new THREE.TorusGeometry(0.09, 0.012, 8, 20);
+const bombBarGeo = new THREE.BoxGeometry(0.012, 0.31, 0.012);
+
+function createBombMesh() {
+  const group = new THREE.Group();
+  const tube = new THREE.Mesh(bombTubeGeo, bombGlassMat);
+  group.add(tube);
+
+  const liquid = new THREE.Mesh(bombLiquidGeo, bombLiquidMat);
+  group.add(liquid);
+
+  for (const y of [-0.16, 0.16]) {
+    const cap = new THREE.Mesh(bombCapGeo, bombMetalMat);
+    cap.position.y = y;
+    cap.castShadow = true;
+    group.add(cap);
+    const ring = new THREE.Mesh(bombRingGeo, bombMetalMat);
+    ring.position.y = y * 0.86;
+    ring.rotation.x = Math.PI / 2;
+    ring.castShadow = true;
+    group.add(ring);
+  }
+
+  for (let i = 0; i < 4; i++) {
+    const bar = new THREE.Mesh(bombBarGeo, bombMetalMat);
+    const a = i * Math.PI / 2 + Math.PI / 4;
+    bar.position.set(Math.cos(a) * 0.092, 0, Math.sin(a) * 0.092);
+    bar.castShadow = true;
+    group.add(bar);
+  }
+  return group;
+}
+
 const toolBallMat = new THREE.MeshStandardMaterial({
   color: '#ff6b57', roughness: 0.42, metalness: 0.05,
 });
@@ -332,6 +381,7 @@ const previewMeshes = {
   ball: new THREE.Mesh(ballGeo, toolBallMat),
   brick: new THREE.Mesh(brickGeo, projectileBrickMat),
   can: new THREE.Mesh(canGeo, makeCanMaterial()),
+  bomb: createBombMesh(),
 };
 previewMeshes.ball.scale.setScalar(1.25);
 for (const mesh of Object.values(previewMeshes)) {
@@ -356,6 +406,12 @@ function drawToolPreview(type, target, angle) {
       angle * 1.15 + Math.sin(angle * 0.45 + 0.7) * 0.5,
       0.25 + Math.cos(angle * 0.65 + 0.2) * 0.4,
     );
+  } else if (type === 'bomb') {
+    mesh.rotation.set(
+      angle * 0.7 + Math.sin(angle * 0.55 + 1.4) * 0.45,
+      angle * 1.0 + Math.cos(angle * 0.4 + 0.3) * 0.5,
+      angle * 0.5 + Math.sin(angle * 0.65 + 2.2) * 0.4,
+    );
   } else {
     mesh.rotation.set(
       angle * 0.9 + Math.sin(angle * 0.6) * 0.4,
@@ -373,7 +429,7 @@ function updateToolPreviews(now) {
   const angle = now * 0.0006;
   drawToolPreview(projectileType, toolButtonCanvas, angle);
   if (!toolWrap.classList.contains('open')) return;
-  const offsets = { ball: 0, brick: 1.1, can: 2.3 };
+  const offsets = { ball: 0, brick: 1.1, can: 2.3, bomb: 3.4 };
   for (const [type, canvas] of toolItemCanvases) {
     drawToolPreview(type, canvas, angle + offsets[type]);
   }
@@ -382,7 +438,9 @@ function updateToolPreviews(now) {
 const bricks = [];
 const staticBricks = [];
 const balls = [];
+const explosions = [];
 const ballColliders = new Map();
+const explosionGeo = new THREE.SphereGeometry(0.16, 16, 12);
 let towerBounds = null;
 let fallenCount = 0;
 let throwCount = 0;
@@ -475,6 +533,8 @@ let chargeStart = 0;
 let power = 0;
 let ballRadius = CONFIG.ball.radius;
 let projectileType = 'ball';
+let bombStrength = 1;
+let bombRadius = 2;
 
 const tmpForward = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -486,6 +546,7 @@ function aimDirection(out) {
 function projectileRadius() {
   if (projectileType === 'brick') return CONFIG.brick.d / 2;
   if (projectileType === 'can') return CONFIG.cans.radius;
+  if (projectileType === 'bomb') return 0.16;
   return ballRadius;
 }
 
@@ -1073,6 +1134,57 @@ function clearBalls() {
   for (const ball of balls.slice()) removeBall(ball);
 }
 
+function spawnExplosion(pos) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: '#7dffb0', transparent: true, opacity: 0.75,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const mesh = new THREE.Mesh(explosionGeo, mat);
+  mesh.position.copy(pos);
+  mesh.scale.setScalar(0.4);
+  scene.add(mesh);
+  explosions.push({ mesh, age: 0 });
+  spawnParticles(pos, 18);
+}
+
+function explodeBomb(bomb) {
+  const t = bomb.body.translation();
+  const pos = new THREE.Vector3(t.x, t.y, t.z);
+  removeBall(bomb);
+  spawnExplosion(pos);
+
+  const radius = bombRadius;
+  for (const b of bricks) {
+    const p = b.body.translation();
+    const dx = p.x - pos.x;
+    const dy = p.y - pos.y;
+    const dz = p.z - pos.z;
+    const dist = Math.hypot(dx, dy, dz);
+    if (dist > radius || dist < 1e-4) continue;
+    const strength = 3.2 * bombStrength * (1 - dist / radius);
+    b.body.applyImpulse({
+      x: dx / dist * strength,
+      y: dy / dist * strength + strength * 0.15,
+      z: dz / dist * strength,
+    }, true);
+  }
+}
+
+function updateExplosions(dt) {
+  for (let i = explosions.length - 1; i >= 0; i--) {
+    const e = explosions[i];
+    e.age += dt;
+    const t = Math.min(1, e.age / 0.45);
+    e.mesh.scale.setScalar(0.4 + t * 5);
+    e.mesh.material.opacity = 0.75 * (1 - t);
+    if (e.age >= 0.45) {
+      scene.remove(e.mesh);
+      e.mesh.material.dispose();
+      explosions.splice(i, 1);
+    }
+  }
+}
+
 function throwBall(value) {
   const spawn = launchPoint(new THREE.Vector3());
   const speed = currentSpeed(value);
@@ -1115,6 +1227,12 @@ function throwBall(value) {
       .setFriction(0.5)
       .setRestitution(0.18);
     mesh = new THREE.Mesh(canGeo, makeCanMaterial());
+  } else if (projectileType === 'bomb') {
+    colliderDesc = RAPIER.ColliderDesc.cylinder(0.16, 0.09)
+      .setMass(0.5)
+      .setFriction(0.45)
+      .setRestitution(0.1);
+    mesh = createBombMesh();
   } else {
     const scale = ballRadius / CONFIG.ball.radius;
     const mass = CONFIG.ball.mass * scale * scale * scale;
@@ -1127,7 +1245,7 @@ function throwBall(value) {
   }
 
   colliderDesc
-    .setCollisionGroups(BALL_COLLISION_GROUPS)
+    .setCollisionGroups(projectileType === 'bomb' ? BOMB_COLLISION_GROUPS : BALL_COLLISION_GROUPS)
     .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
   const collider = world.createCollider(colliderDesc, body);
 
@@ -1138,6 +1256,7 @@ function throwBall(value) {
   const ball = {
     body, mesh, handle: collider.handle,
     age: 0, lastImpact: 0,
+    explosive: projectileType === 'bomb',
     pos: new THREE.Vector3(), quat: new THREE.Quaternion(),
   };
   balls.push(ball);
@@ -1262,6 +1381,10 @@ function handleEvents() {
     if (!began) return;
     const ball = ballColliders.get(h1) || ballColliders.get(h2);
     if (!ball) return;
+    if (ball.explosive) {
+      explodeBomb(ball);
+      return;
+    }
     const now = performance.now();
     if (now - ball.lastImpact < 70) return;
     ball.lastImpact = now;
@@ -1390,21 +1513,26 @@ homeBtn.addEventListener('click', () => {
   goHome();
 });
 
-function updateBallSize() {
+function updateSizeControl() {
   const t = Number(sizeSlider.value) / 1000;
   const diameterCm = 16 * Math.pow(200 / 16, t);
   ballRadius = diameterCm / 200;
-  sizeLabel.textContent = `${Math.round(diameterCm)}`;
+  bombStrength = 0.5 + t * 2;
+  bombRadius = 1.5 + t * 1.5;
+  sizeLabel.textContent = projectileType === 'bomb'
+    ? `${Math.round(t * 100)}`
+    : `${Math.round(diameterCm)}`;
 }
 
-sizeSlider.addEventListener('input', updateBallSize);
-updateBallSize();
+sizeSlider.addEventListener('input', updateSizeControl);
+updateSizeControl();
 
 function setProjectile(type) {
   projectileType = type;
   for (const item of toolItems) {
     item.classList.toggle('active', item.dataset.projectile === type);
   }
+  updateSizeControl();
 }
 
 toolBtn.addEventListener('click', (event) => {
@@ -1518,6 +1646,7 @@ function animate() {
     updateBricks();
     updateBalls(dt);
     updateParticles(dt);
+    updateExplosions(dt);
   }
 
   updatePreview();
