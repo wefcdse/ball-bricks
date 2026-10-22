@@ -13,7 +13,9 @@ const CONFIG = {
   ring: { radius: 1.05, cols: 13, rows: 20, z: -1.9 },
   flat: { radius: 1.15, cols: 13, rows: 40, z: -1.9 },
   cans: { radius: 0.12, length: 0.38, mass: 0.35, base: 18, layers: 18, spacing: 0.276, z: -1.9 },
-  stand: { height: 0.95, thickness: 0.12, margin: 0.2625, depthMargin: -0.0125, legWidth: 0.18 },
+  canPyramid: { base: 12 },
+  brickPile: { nx: 4, nz: 8, layers: 18 },
+  brickPillars: { count: 8, spacing: 0.55, layers: 18, z: -0.8 },  stand: { height: 0.95, thickness: 0.12, margin: 0.2625, depthMargin: -0.0125, legWidth: 0.18 },
   backWall: { z: -6, width: 90, height: 24, thickness: 1 },
   brick: { w: 0.48, h: 0.106, d: 0.23, gap: 0.012, mass: 0.45 },
   ball: { radius: 0.16, mass: 4, minSpeed: 15, maxSpeed: 32, chargeTime: 1.0 },
@@ -44,9 +46,12 @@ const SCENES = {
   ring: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
   flat: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
   cans: { camera: { height: 2.0, z: 6.2, pitch: 0.08 } },
+  canPyramid: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
+  brickPile: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
+  brickPillars: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
 };
 
-const GROUND_SCENES = new Set(['ring', 'flat']);
+const GROUND_SCENES = new Set(['ring', 'flat', 'canPyramid', 'brickPile', 'brickPillars']);
 
 const overlay = document.getElementById('overlay');
 const hud = document.getElementById('hud');
@@ -1051,6 +1056,102 @@ function buildCanTower() {
   }
 }
 
+function buildCanPyramid() {
+  const { length, spacing } = CONFIG.cans;
+  const base = CONFIG.canPyramid.base;
+  const baseY = length / 2 + 0.002;
+
+  for (let layer = 0; layer < base; layer++) {
+    const n = base - layer;
+    const y = baseY + layer * (length + 0.002);
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        createCan({
+          x: (i - (n - 1) / 2) * spacing,
+          y,
+          z: CONFIG.targetZ + (j - (n - 1) / 2) * spacing,
+        });
+      }
+    }
+  }
+}
+
+function createBrickAlongZ(spec) {
+  const { w, h, d } = CONFIG.brick;
+  const localHalf = { x: w / 2, y: h / 2, z: d / 2 };
+  const boundHalf = { x: d / 2, y: h / 2, z: w / 2 };
+  const rotation = { x: 0, y: Math.SQRT1_2, z: 0, w: Math.SQRT1_2 };
+  createBrickBody(spec, localHalf, boundHalf, rotation);
+}
+
+function buildBrickPile() {
+  const { w, h, d, gap } = CONFIG.brick;
+  const { nx, nz, layers } = CONFIG.brickPile;
+  const stepX = w + gap;
+  const stepZ = d + gap;
+  const baseY = h / 2 + 0.002;
+
+  for (let layer = 0; layer < layers; layer++) {
+    const y = baseY + layer * (h + gap);
+    if (layer % 2 === 0) {
+      for (let ix = 0; ix < nx; ix++) {
+        for (let iz = 0; iz < nz; iz++) {
+          createBrick({
+            x: (ix - (nx - 1) / 2) * stepX,
+            y,
+            z: CONFIG.targetZ + (iz - (nz - 1) / 2) * stepZ,
+            color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+          });
+        }
+      }
+    } else {
+      for (let ix = 0; ix < nz; ix++) {
+        for (let iz = 0; iz < nx; iz++) {
+          createBrickAlongZ({
+            x: (ix - (nz - 1) / 2) * stepZ,
+            y,
+            z: CONFIG.targetZ + (iz - (nx - 1) / 2) * stepX,
+            color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+          });
+        }
+      }
+    }
+  }
+}
+
+function buildBrickPillars() {
+  const { w, h, d, gap } = CONFIG.brick;
+  const { count, spacing, layers, z: centerZ } = CONFIG.brickPillars;
+  const baseY = h / 2 + 0.002;
+  const side = (d + gap) / 2;
+
+  for (let p = 0; p < count; p++) {
+    const px = (p - (count - 1) / 2) * spacing;
+    for (let layer = 0; layer < layers; layer++) {
+      const y = baseY + layer * (h + gap);
+      if (layer % 2 === 0) {
+        for (const dz of [-side, side]) {
+          createBrick({
+            x: px,
+            y,
+            z: centerZ + dz,
+            color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+          });
+        }
+      } else {
+        for (const dx of [-side, side]) {
+          createBrickAlongZ({
+            x: px + dx,
+            y,
+            z: centerZ,
+            color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+          });
+        }
+      }
+    }
+  }
+}
+
 function computeTowerBounds() {
   const min = new THREE.Vector3(Infinity, Infinity, Infinity);
   const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
@@ -1107,6 +1208,12 @@ function spawnBricks() {
     buildFlatRing();
   } else if (currentScene === 'cans') {
     buildCanTower();
+  } else if (currentScene === 'canPyramid') {
+    buildCanPyramid();
+  } else if (currentScene === 'brickPile') {
+    buildBrickPile();
+  } else if (currentScene === 'brickPillars') {
+    buildBrickPillars();
   } else if (currentScene === 'framedWall') {
     buildFramedWall();
     createDenseBase(CONFIG.framedWall.cols - 2);

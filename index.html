@@ -127,18 +127,20 @@
   #toolBtn:hover { background: rgba(255, 255, 255, .95); }
   #toolBtn canvas { width: 100%; height: 100%; display: block; }
   #toolMenu {
-    position: absolute; top: calc(100% + 8px); left: 0; width: 222px;
-    padding: 6px; border-radius: 14px; display: none; flex-direction: row; flex-wrap: wrap; gap: 6px;
+    position: absolute; top: calc(100% + 8px); left: 0; width: 150px;
+    padding: 6px; border-radius: 14px; display: none; flex-direction: column; gap: 6px;
   }
   #toolWrap.open #toolMenu { display: flex; }
+  .toolRow { display: flex; gap: 6px; }
   .toolItem {
-    width: 66px; height: 66px; padding: 0; border-radius: 16px; overflow: hidden;
+    flex: 0 0 66px; width: 66px; height: 66px; min-width: 0; padding: 0;
+    border-radius: 16px; overflow: hidden;
     border: 2px solid transparent; background: transparent; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
   }
   .toolItem:hover { background: rgba(255, 255, 255, .75); }
   .toolItem.active { border-color: #ff7a59; background: rgba(255, 122, 89, .12); }
-  .toolItem canvas { width: 100%; height: 100%; display: block; }
+  .toolItem canvas { width: 100%; height: 100%; min-width: 0; display: block; }
 
   #overlay {
     position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -183,7 +185,6 @@
   }
   .sceneBtn:active:not(:disabled) { transform: translateY(0) scale(.98); }
   .sceneBtn:disabled { opacity: .45; cursor: wait; }
-  .sceneBtn.wide { grid-column: 1 / -1; }
   .sceneName { display: block; font-size: 17px; font-weight: 700; letter-spacing: 2px; }
   .sceneDesc { display: block; margin-top: 6px; font-size: 11px; line-height: 1.6; color: #7b95ad; }
   .card .foot { margin-top: 18px; font-size: 11px; letter-spacing: 1px; color: #93aabd; }
@@ -228,18 +229,22 @@
       <canvas id="toolPreview" width="96" height="96"></canvas>
     </button>
     <div id="toolMenu" class="glass">
-      <button class="toolItem active" type="button" data-projectile="ball" aria-label="红色球" title="红色球">
-        <canvas class="toolPreview" width="128" height="128"></canvas>
-      </button>
-      <button class="toolItem" type="button" data-projectile="brick" aria-label="砖头" title="砖头">
-        <canvas class="toolPreview" width="128" height="128"></canvas>
-      </button>
-      <button class="toolItem" type="button" data-projectile="can" aria-label="罐子" title="罐子">
-        <canvas class="toolPreview" width="128" height="128"></canvas>
-      </button>
-      <button class="toolItem" type="button" data-projectile="bomb" aria-label="炸弹" title="炸弹">
-        <canvas class="toolPreview" width="128" height="128"></canvas>
-      </button>
+      <div class="toolRow">
+        <button class="toolItem active" type="button" data-projectile="ball" aria-label="红色球" title="红色球">
+          <canvas class="toolPreview" width="128" height="128"></canvas>
+        </button>
+        <button class="toolItem" type="button" data-projectile="brick" aria-label="砖头" title="砖头">
+          <canvas class="toolPreview" width="128" height="128"></canvas>
+        </button>
+      </div>
+      <div class="toolRow">
+        <button class="toolItem" type="button" data-projectile="can" aria-label="罐子" title="罐子">
+          <canvas class="toolPreview" width="128" height="128"></canvas>
+        </button>
+        <button class="toolItem" type="button" data-projectile="bomb" aria-label="炸弹" title="炸弹">
+          <canvas class="toolPreview" width="128" height="128"></canvas>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -282,9 +287,21 @@
           <span class="sceneName">高塔罐</span>
           <span class="sceneDesc">8 砖宽<br>格内塞罐</span>
         </button>
-        <button class="sceneBtn wide" type="button" data-scene="framedWall" disabled>
+        <button class="sceneBtn" type="button" data-scene="framedWall" disabled>
           <span class="sceneName">框墙</span>
           <span class="sceneDesc">灰砖锁边 · 底部密排竖砖</span>
+        </button>
+        <button class="sceneBtn" type="button" data-scene="canPyramid" disabled>
+          <span class="sceneName">罐金字塔</span>
+          <span class="sceneDesc">地面罐堆<br>十二层金字塔</span>
+        </button>
+        <button class="sceneBtn" type="button" data-scene="brickPile" disabled>
+          <span class="sceneName">砖堆</span>
+          <span class="sceneDesc">X / Z 长轴逐层交错<br>大长方体砖堆</span>
+        </button>
+        <button class="sceneBtn" type="button" data-scene="brickPillars" disabled>
+          <span class="sceneName">砖柱</span>
+          <span class="sceneDesc">双砖柱<br>交错叠高 · 间距拉大</span>
         </button>
       </div>
       <p class="foot"><em>R</em> 重置当前场景 · 左上角也有重置按钮</p>
