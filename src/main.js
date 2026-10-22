@@ -49,9 +49,10 @@ const SCENES = {
   canPyramid: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
   brickPile: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
   brickPillars: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
+  desk: { camera: { height: 1.9, z: 3.8, pitch: 0.08 } },
 };
 
-const GROUND_SCENES = new Set(['ring', 'flat', 'canPyramid', 'brickPile', 'brickPillars']);
+const GROUND_SCENES = new Set(['ring', 'flat', 'canPyramid', 'brickPile', 'brickPillars', 'desk']);
 
 const overlay = document.getElementById('overlay');
 const hud = document.getElementById('hud');
@@ -237,6 +238,9 @@ const frameMat = new THREE.MeshStandardMaterial({
 });
 const projectileBrickMat = new THREE.MeshStandardMaterial({
   color: '#b5533c', map: brickTexture, roughness: 0.9, metalness: 0,
+});
+const deskWoodMat = new THREE.MeshStandardMaterial({
+  color: '#a9794d', roughness: 0.82, metalness: 0,
 });
 const ballGeo = new THREE.SphereGeometry(CONFIG.ball.radius, 24, 18);
 const ballMat = new THREE.MeshStandardMaterial({
@@ -740,6 +744,152 @@ function createBrickBody({ x, y, z, color }, localHalf, boundHalf, rotation = nu
   bricks.push(brick);
 }
 
+const PROP_SCALE = 1.5;
+const PROP_CENTER_Z = -1.2;
+
+function addDynamicProp(mesh, half, pos, mass) {
+  const h = { x: half.x * PROP_SCALE, y: half.y * PROP_SCALE, z: half.z * PROP_SCALE };
+  const p = {
+    x: pos.x * PROP_SCALE,
+    y: pos.y * PROP_SCALE,
+    z: PROP_CENTER_Z + (pos.z - PROP_CENTER_Z) * PROP_SCALE,
+  };
+  const body = world.createRigidBody(
+    RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(p.x, p.y, p.z)
+      .setLinearDamping(0.12)
+      .setAngularDamping(0.3),
+  );
+  world.createCollider(
+    RAPIER.ColliderDesc.cuboid(h.x, h.y, h.z)
+      .setMass(mass)
+      .setFriction(0.65)
+      .setRestitution(0.12),
+    body,
+  );
+  mesh.scale.setScalar(PROP_SCALE);
+  mesh.position.set(p.x, p.y, p.z);
+  mesh.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+  });
+  scene.add(mesh);
+  bricks.push({
+    body, mesh, fallen: false,
+    hx: h.x, hy: h.y, hz: h.z,
+    initial: new THREE.Vector3(p.x, p.y, p.z),
+  });
+}
+
+function addStaticProp(mesh, half, pos) {
+  const h = { x: half.x * PROP_SCALE, y: half.y * PROP_SCALE, z: half.z * PROP_SCALE };
+  const p = {
+    x: pos.x * PROP_SCALE,
+    y: pos.y * PROP_SCALE,
+    z: PROP_CENTER_Z + (pos.z - PROP_CENTER_Z) * PROP_SCALE,
+  };
+  const body = world.createRigidBody(
+    RAPIER.RigidBodyDesc.fixed().setTranslation(p.x, p.y, p.z),
+  );
+  world.createCollider(
+    RAPIER.ColliderDesc.cuboid(h.x, h.y, h.z)
+      .setFriction(0.8)
+      .setRestitution(0.05),
+    body,
+  );
+  mesh.scale.setScalar(PROP_SCALE);
+  mesh.position.set(p.x, p.y, p.z);
+  mesh.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+  });
+  scene.add(mesh);
+  staticBricks.push({ body, mesh });
+}
+
+function addDynamicCompound(group, parts, pos, mass) {
+  const p = {
+    x: pos.x * PROP_SCALE,
+    y: pos.y * PROP_SCALE,
+    z: PROP_CENTER_Z + (pos.z - PROP_CENTER_Z) * PROP_SCALE,
+  };
+  const body = world.createRigidBody(
+    RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(p.x, p.y, p.z)
+      .setLinearDamping(0.12)
+      .setAngularDamping(0.3),
+  );
+  const partMass = mass / parts.length;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+
+  for (const part of parts) {
+    const h = {
+      x: part.half.x * PROP_SCALE,
+      y: part.half.y * PROP_SCALE,
+      z: part.half.z * PROP_SCALE,
+    };
+    const off = {
+      x: part.offset.x * PROP_SCALE,
+      y: part.offset.y * PROP_SCALE,
+      z: part.offset.z * PROP_SCALE,
+    };
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(h.x, h.y, h.z)
+        .setTranslation(off.x, off.y, off.z)
+        .setMass(partMass)
+        .setFriction(0.7)
+        .setRestitution(0.08),
+      body,
+    );
+    minX = Math.min(minX, off.x - h.x);
+    maxX = Math.max(maxX, off.x + h.x);
+    minY = Math.min(minY, off.y - h.y);
+    maxY = Math.max(maxY, off.y + h.y);
+    minZ = Math.min(minZ, off.z - h.z);
+    maxZ = Math.max(maxZ, off.z + h.z);
+  }
+
+  group.scale.setScalar(PROP_SCALE);
+  group.position.set(p.x, p.y, p.z);
+  group.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+  });
+  scene.add(group);
+
+  bricks.push({
+    body, mesh: group, fallen: false,
+    hx: (maxX - minX) / 2,
+    hy: (maxY - minY) / 2,
+    hz: (maxZ - minZ) / 2,
+    initial: new THREE.Vector3(p.x, p.y, p.z),
+  });
+}
+
+function disposeMeshMaterials(mesh) {
+  const mats = new Set();
+  mesh.traverse((o) => {
+    if (!o.isMesh) return;
+    if (Array.isArray(o.material)) {
+      for (const m of o.material) mats.add(m);
+    } else if (o.material) {
+      mats.add(o.material);
+    }
+  });
+  for (const m of mats) m.dispose();
+}
+
 function createBrick(spec) {
   const { w, h, d } = CONFIG.brick;
   const half = { x: w / 2, y: h / 2, z: d / 2 };
@@ -1152,6 +1302,165 @@ function buildBrickPillars() {
   }
 }
 
+function buildDeskScene() {
+  const dark = new THREE.MeshStandardMaterial({ color: '#30363b', roughness: 0.5, metalness: 0.3 });
+  const keyboardMat = new THREE.MeshStandardMaterial({ color: '#454b52', roughness: 0.55 });
+  const screenMat = new THREE.MeshStandardMaterial({
+    color: '#2f6a8a', emissive: '#123b4f', emissiveIntensity: 0.5, roughness: 0.35,
+  });
+  const ceramic = new THREE.MeshStandardMaterial({ color: '#e8e3da', roughness: 0.45 });
+  const potMat = new THREE.MeshStandardMaterial({ color: '#b86645', roughness: 0.8 });
+  const leafMat = new THREE.MeshStandardMaterial({ color: '#3f8a4e', roughness: 0.7 });
+  const bookColors = ['#8b4a3c', '#3e647c', '#6c7b4e', '#8a6a3a', '#5b4a72', '#a04b5e'];
+
+  const desk = new THREE.Group();
+  const deskParts = [];
+  const top = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.06, 0.7), deskWoodMat);
+  desk.add(top);
+  deskParts.push({ half: { x: 0.75, y: 0.03, z: 0.35 }, offset: { x: 0, y: 0, z: 0 } });
+
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.69, 0.06), deskWoodMat);
+      leg.position.set(sx * 0.68, -0.375, sz * 0.28);
+      desk.add(leg);
+      deskParts.push({
+        half: { x: 0.03, y: 0.345, z: 0.03 },
+        offset: { x: sx * 0.68, y: -0.375, z: sz * 0.28 },
+      });
+    }
+  }
+  addDynamicCompound(desk, deskParts, { x: 0, y: 0.72, z: -1.2 }, 8);
+
+  const shelfX = 1.15;
+  const shelfZ = -1.7;
+  const shelf = new THREE.Group();
+  const shelfParts = [];
+
+  for (const side of [-1, 1]) {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.6, 0.32), deskWoodMat);
+    panel.position.set(side * 0.33, 0, 0);
+    shelf.add(panel);
+    shelfParts.push({
+      half: { x: 0.02, y: 0.8, z: 0.16 },
+      offset: { x: side * 0.33, y: 0, z: 0 },
+    });
+  }
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.6, 0.02), deskWoodMat);
+  back.position.z = -0.15;
+  shelf.add(back);
+  shelfParts.push({
+    half: { x: 0.35, y: 0.8, z: 0.01 },
+    offset: { x: 0, y: 0, z: -0.15 },
+  });
+
+  const shelfYs = [0.04, 0.3, 0.75, 1.2, 1.55];
+  for (const y of shelfYs) {
+    const board = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.03, 0.3), deskWoodMat);
+    board.position.y = y - 0.8;
+    shelf.add(board);
+    shelfParts.push({
+      half: { x: 0.35, y: 0.015, z: 0.15 },
+      offset: { x: 0, y: y - 0.8, z: 0 },
+    });
+  }
+  addDynamicCompound(shelf, shelfParts, { x: shelfX, y: 0.8, z: shelfZ }, 12);
+
+  const monitor = new THREE.Group();
+  const screen = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.34, 0.04), dark);
+  screen.position.y = 0.095;
+  const display = new THREE.Mesh(new THREE.BoxGeometry(0.49, 0.26, 0.006), screenMat);
+  display.position.set(0, 0.095, 0.023);
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.06), dark);
+  stand.position.y = -0.165;
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.14), dark);
+  base.position.y = -0.255;
+  monitor.add(screen, display, stand, base);
+  addDynamicProp(monitor, { x: 0.28, y: 0.265, z: 0.08 }, {
+    x: -0.25, y: 1.015, z: -1.35,
+  }, 2);
+
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.45, 0.45), dark);
+  addDynamicProp(tower, { x: 0.1, y: 0.225, z: 0.225 }, {
+    x: -0.95, y: 0.227, z: -1.2,
+  }, 5);
+
+  const keyboard = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.03, 0.14), keyboardMat);
+  addDynamicProp(keyboard, { x: 0.21, y: 0.015, z: 0.07 }, {
+    x: -0.25, y: 0.765, z: -1.02,
+  }, 0.5);
+
+  const mouse = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.04, 0.1), keyboardMat);
+  addDynamicProp(mouse, { x: 0.035, y: 0.02, z: 0.05 }, {
+    x: 0.1, y: 0.77, z: -1.02,
+  }, 0.15);
+
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.04, 0.12, 16), ceramic);
+  addDynamicProp(cup, { x: 0.045, y: 0.06, z: 0.045 }, {
+    x: 0.42, y: 0.81, z: -1.15,
+  }, 0.2);
+
+  const plant = new THREE.Group();
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.12, 12), potMat);
+  pot.position.y = -0.14;
+  plant.add(pot);
+  const leafGeo = new THREE.SphereGeometry(0.075, 10, 8);
+  for (const [dx, dy, dz] of [[0, 0.02, 0], [0.06, -0.02, 0.03], [-0.05, -0.03, -0.04]]) {
+    const leaf = new THREE.Mesh(leafGeo, leafMat);
+    leaf.position.set(dx, dy, dz);
+    plant.add(leaf);
+  }
+  addDynamicProp(plant, { x: 0.12, y: 0.2, z: 0.12 }, {
+    x: 0.6, y: 0.95, z: -1.35,
+  }, 0.6);
+
+  const addBook = (x, y, z, w, d, color, mass) => {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.035, d),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.8 }),
+    );
+    addDynamicProp(mesh, { x: w / 2, y: 0.0175, z: d / 2 }, { x, y, z }, mass);
+  };
+
+  addBook(-0.62, 0.768, -1.4, 0.22, 0.16, bookColors[0], 0.3);
+  addBook(-0.61, 0.803, -1.4, 0.22, 0.16, bookColors[1], 0.3);
+  addBook(-0.62, 0.838, -1.4, 0.22, 0.16, bookColors[2], 0.3);
+
+  const addUprightBook = (x, bottom, z, thickness, height, depth, color) => {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(thickness, height, depth),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.8 }),
+    );
+    addDynamicProp(
+      mesh,
+      { x: thickness / 2, y: height / 2, z: depth / 2 },
+      { x, y: bottom + height / 2, z },
+      0.12,
+    );
+  };
+
+  for (let i = 0; i < shelfYs.length - 1; i++) {
+    const bottom = shelfYs[i] + 0.015;
+    const maxHeight = shelfYs[i + 1] - 0.015 - bottom - 0.01;
+    let x = -0.29;
+    for (let b = 0; b < 14; b++) {
+      const thickness = 0.022 + Math.random() * 0.012;
+      if (x + thickness > 0.29) break;
+      const height = Math.min(maxHeight, 0.18 + Math.random() * 0.12);
+      addUprightBook(
+        shelfX + x + thickness / 2,
+        bottom,
+        shelfZ,
+        thickness,
+        height,
+        0.14,
+        bookColors[(i * 14 + b) % bookColors.length],
+      );
+      x += thickness + 0.003;
+    }
+  }
+}
+
 function computeTowerBounds() {
   const min = new THREE.Vector3(Infinity, Infinity, Infinity);
   const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
@@ -1182,7 +1491,7 @@ function clearBricks() {
   for (const b of bricks) {
     world.removeRigidBody(b.body);
     scene.remove(b.mesh);
-    b.mesh.material.dispose();
+    disposeMeshMaterials(b.mesh);
   }
   bricks.length = 0;
   for (const b of staticBricks) {
@@ -1214,6 +1523,8 @@ function spawnBricks() {
     buildBrickPile();
   } else if (currentScene === 'brickPillars') {
     buildBrickPillars();
+  } else if (currentScene === 'desk') {
+    buildDeskScene();
   } else if (currentScene === 'framedWall') {
     buildFramedWall();
     createDenseBase(CONFIG.framedWall.cols - 2);
