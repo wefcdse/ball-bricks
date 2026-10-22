@@ -6,7 +6,9 @@ const CONFIG = {
   layout: 'wall',
   pyramid: { base: 4, layers: 4 },
   wall: { cols: 9, rows: 40, soldierBase: true },
+  framedWall: { cols: 12, rows: 40 },
   tower: { cols: 5, cycles: 15 },
+  towerCans: { cols: 8 },
   taper: { baseCols: 10 },
   ring: { radius: 1.05, cols: 13, rows: 20, z: -1.9 },
   flat: { radius: 1.15, cols: 13, rows: 40, z: -1.9 },
@@ -25,8 +27,11 @@ const PALETTE = ['#b5533c', '#a94b35', '#c0644b', '#9c4530', '#b85b43', '#a85642
 
 const SCENES = {
   wall: { camera: { ...CONFIG.camera } },
+  framedWall: { camera: { height: 1.9, z: 5.6, pitch: 0.1 } },
   tower: { camera: { height: 2.2, z: 9.5, pitch: 0.1 } },
+  towerCans: { camera: { height: 2.2, z: 9.5, pitch: 0.1 } },
   taper: { camera: { height: 1.8, z: 6.0, pitch: 0.08 } },
+  taperCans: { camera: { height: 1.8, z: 6.0, pitch: 0.08 } },
   ring: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
   flat: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
   cans: { camera: { height: 2.0, z: 6.2, pitch: 0.08 } },
@@ -206,6 +211,9 @@ const brickTexture = makeBrickTexture();
 const brickGeo = new RoundedBoxGeometry(
   CONFIG.brick.w, CONFIG.brick.h, CONFIG.brick.d, 2, 0.008,
 );
+const frameMat = new THREE.MeshStandardMaterial({
+  color: '#8e959c', map: brickTexture, roughness: 0.85, metalness: 0.05,
+});
 const ballGeo = new THREE.SphereGeometry(CONFIG.ball.radius, 24, 18);
 const ballMat = new THREE.MeshStandardMaterial({
   color: '#ff6b57', roughness: 0.4, metalness: 0.05,
@@ -285,11 +293,13 @@ function makeCanMaterial() {
 }
 
 const bricks = [];
+const staticBricks = [];
 const balls = [];
 const ballColliders = new Map();
 let towerBounds = null;
 let fallenCount = 0;
 let throwCount = 0;
+let lockTimer = null;
 
 function makeDotTexture() {
   const size = 64;
@@ -422,7 +432,7 @@ function updateAimFromScreen(clientX, clientY) {
   camera.updateMatrixWorld();
   raycaster.setFromCamera(mouseNdc, camera);
   const targets = bricks.map((b) => b.mesh);
-  targets.push(ground, backWall, ...standMeshes.filter((m) => m.visible));
+  targets.push(ground, backWall, ...standMeshes.filter((m) => m.visible), ...staticBricks.map((b) => b.mesh));
   const hits = raycaster.intersectObjects(targets, false);
   if (hits.length > 0) {
     const hit = hits[0];
@@ -609,9 +619,74 @@ function createSoldierBase() {
   }
 }
 
-function buildTower() {
+function createDenseBase(cols = CONFIG.wall.cols) {
   const { w, h, gap } = CONFIG.brick;
-  const n = CONFIG.tower.cols;
+  const width = (cols - 1) * (w + gap) + w;
+  const step = h + gap;
+  const count = Math.floor(width / step);
+  const y = CONFIG.stand.height + w / 2 + 0.001;
+  for (let i = 0; i < count; i++) {
+    createUpright({
+      x: (i - (count - 1) / 2) * step,
+      y,
+      z: CONFIG.targetZ,
+      color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+    });
+  }
+}
+
+function createStaticWallBrick({ x, y, z }, alwaysFixed = false) {
+  const { w, h, d } = CONFIG.brick;
+  const bodyDesc = alwaysFixed
+    ? RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, z)
+    : RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(x, y, z)
+      .setLinearDamping(0.12)
+      .setAngularDamping(0.35);
+  const body = world.createRigidBody(bodyDesc);
+  world.createCollider(
+    RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2)
+      .setMass(CONFIG.brick.mass)
+      .setFriction(0.8)
+      .setRestitution(0.05),
+    body,
+  );
+  const mesh = new THREE.Mesh(brickGeo, frameMat);
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  staticBricks.push({ body, mesh });
+}
+
+function buildFramedWall() {
+  const { w, h, gap } = CONFIG.brick;
+  const { cols, rows } = CONFIG.framedWall;
+  const step = w + gap;
+  const baseY = CONFIG.stand.height + w + 0.006;
+
+  for (let r = 0; r < rows; r++) {
+    const n = cols - (r % 2);
+    for (let c = 0; c < n; c++) {
+      const x = (c - (n - 1) / 2) * step;
+      const y = baseY + h / 2 + r * (h + gap);
+      if (c === 0 || c === n - 1) {
+        createStaticWallBrick({ x, y, z: CONFIG.targetZ }, r === 0);
+      } else {
+        createBrick({
+          x,
+          y,
+          z: CONFIG.targetZ,
+          color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+        });
+      }
+    }
+  }
+}
+
+function buildTower({ cols = CONFIG.tower.cols, withCans = false } = {}) {
+  const { w, h, gap } = CONFIG.brick;
+  const n = cols;
   const cycles = CONFIG.tower.cycles;
   const step = w + gap;
   const centers = [];
@@ -637,6 +712,17 @@ function buildTower() {
         color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
       });
     }
+
+    if (withCans) {
+      for (let c = 0; c < n; c++) {
+        createCan({
+          x: (supports[c] + supports[c + 1]) / 2,
+          y: bottom + CONFIG.cans.length / 2 + 0.002,
+          z: CONFIG.targetZ,
+        });
+      }
+    }
+
     bottom += w;
 
     const brickY = bottom + 0.001 + h / 2;
@@ -652,7 +738,7 @@ function buildTower() {
   }
 }
 
-function buildTaperTower() {
+function buildTaperTower(withCans = false) {
   const { w, h, gap } = CONFIG.brick;
   const baseCols = CONFIG.taper.baseCols;
   const step = w + gap;
@@ -675,6 +761,16 @@ function buildTaperTower() {
       supports.push((centers[c] + centers[c + 1]) / 2);
     }
     supports.push(centers[n - 1] + w / 2 - halfUpright);
+
+    if (withCans) {
+      for (let c = 0; c < n; c++) {
+        createCan({
+          x: (supports[c] + supports[c + 1]) / 2,
+          y: bottom + CONFIG.cans.length / 2 + 0.002,
+          z: CONFIG.targetZ,
+        });
+      }
+    }
 
     const uprightY = bottom + w / 2;
     for (const x of supports) {
@@ -831,26 +927,42 @@ function settle() {
 }
 
 function clearBricks() {
+  if (lockTimer) {
+    clearTimeout(lockTimer);
+    lockTimer = null;
+  }
   for (const b of bricks) {
     world.removeRigidBody(b.body);
     scene.remove(b.mesh);
     b.mesh.material.dispose();
   }
   bricks.length = 0;
+  for (const b of staticBricks) {
+    world.removeRigidBody(b.body);
+    scene.remove(b.mesh);
+  }
+  staticBricks.length = 0;
 }
 
 function spawnBricks() {
   clearBricks();
   if (currentScene === 'tower') {
     buildTower();
+  } else if (currentScene === 'towerCans') {
+    buildTower({ cols: CONFIG.towerCans.cols, withCans: true });
   } else if (currentScene === 'taper') {
     buildTaperTower();
+  } else if (currentScene === 'taperCans') {
+    buildTaperTower(true);
   } else if (currentScene === 'ring') {
     buildRingTower();
   } else if (currentScene === 'flat') {
     buildFlatRing();
   } else if (currentScene === 'cans') {
     buildCanTower();
+  } else if (currentScene === 'framedWall') {
+    buildFramedWall();
+    createDenseBase(CONFIG.framedWall.cols - 2);
   } else {
     for (const spec of buildLayout()) createBrick(spec);
     if (CONFIG.layout === 'wall' && CONFIG.wall.soldierBase) createSoldierBase();
@@ -861,6 +973,15 @@ function spawnBricks() {
   fallenCount = 0;
   fallenEl.textContent = '0';
   totalEl.textContent = String(bricks.length);
+
+  if (currentScene === 'framedWall') {
+    lockTimer = setTimeout(() => {
+      for (const b of staticBricks) {
+        b.body.setBodyType(RAPIER.RigidBodyType.Fixed, true);
+      }
+      lockTimer = null;
+    }, 400);
+  }
 }
 
 function removeBall(ball) {
@@ -1008,6 +1129,12 @@ function updateBricks() {
 
 function syncMeshes() {
   for (const b of bricks) {
+    const t = b.body.translation();
+    const q = b.body.rotation();
+    b.mesh.position.set(t.x, t.y, t.z);
+    b.mesh.quaternion.set(q.x, q.y, q.z, q.w);
+  }
+  for (const b of staticBricks) {
     const t = b.body.translation();
     const q = b.body.rotation();
     b.mesh.position.set(t.x, t.y, t.z);
