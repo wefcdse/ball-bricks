@@ -25,6 +25,13 @@ const CONFIG = {
 
 const PALETTE = ['#b5533c', '#a94b35', '#c0644b', '#9c4530', '#b85b43', '#a85642'];
 
+const BALL_GROUP = 0x0001;
+const FIXED_BRICK_GROUP = 0x0002;
+const STAND_GROUP = 0x0004;
+const BALL_COLLISION_GROUPS = (BALL_GROUP << 16) | (0xFFFF & ~FIXED_BRICK_GROUP & ~STAND_GROUP);
+const FIXED_BRICK_COLLISION_GROUPS = (FIXED_BRICK_GROUP << 16) | (0xFFFF & ~BALL_GROUP);
+const STAND_COLLISION_GROUPS = (STAND_GROUP << 16) | (0xFFFF & ~BALL_GROUP);
+
 const SCENES = {
   wall: { camera: { ...CONFIG.camera } },
   framedWall: { camera: { height: 1.9, z: 5.6, pitch: 0.1 } },
@@ -299,7 +306,6 @@ const ballColliders = new Map();
 let towerBounds = null;
 let fallenCount = 0;
 let throwCount = 0;
-let lockTimer = null;
 
 function makeDotTexture() {
   const size = 64;
@@ -635,20 +641,16 @@ function createDenseBase(cols = CONFIG.wall.cols) {
   }
 }
 
-function createStaticWallBrick({ x, y, z }, alwaysFixed = false) {
+function createStaticWallBrick({ x, y, z }) {
   const { w, h, d } = CONFIG.brick;
-  const bodyDesc = alwaysFixed
-    ? RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, z)
-    : RAPIER.RigidBodyDesc.dynamic()
-      .setTranslation(x, y, z)
-      .setLinearDamping(0.12)
-      .setAngularDamping(0.35);
-  const body = world.createRigidBody(bodyDesc);
+  const body = world.createRigidBody(
+    RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, z),
+  );
   world.createCollider(
     RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2)
-      .setMass(CONFIG.brick.mass)
       .setFriction(0.8)
-      .setRestitution(0.05),
+      .setRestitution(0.05)
+      .setCollisionGroups(FIXED_BRICK_COLLISION_GROUPS),
     body,
   );
   const mesh = new THREE.Mesh(brickGeo, frameMat);
@@ -664,14 +666,15 @@ function buildFramedWall() {
   const { cols, rows } = CONFIG.framedWall;
   const step = w + gap;
   const baseY = CONFIG.stand.height + w + 0.006;
+  const vGap = -0.004;
 
   for (let r = 0; r < rows; r++) {
     const n = cols - (r % 2);
     for (let c = 0; c < n; c++) {
       const x = (c - (n - 1) / 2) * step;
-      const y = baseY + h / 2 + r * (h + gap);
+      const y = baseY + h / 2 + r * (h + vGap);
       if (c === 0 || c === n - 1) {
-        createStaticWallBrick({ x, y, z: CONFIG.targetZ }, r === 0);
+        createStaticWallBrick({ x, y, z: CONFIG.targetZ });
       } else {
         createBrick({
           x,
@@ -927,10 +930,6 @@ function settle() {
 }
 
 function clearBricks() {
-  if (lockTimer) {
-    clearTimeout(lockTimer);
-    lockTimer = null;
-  }
   for (const b of bricks) {
     world.removeRigidBody(b.body);
     scene.remove(b.mesh);
@@ -973,15 +972,6 @@ function spawnBricks() {
   fallenCount = 0;
   fallenEl.textContent = '0';
   totalEl.textContent = String(bricks.length);
-
-  if (currentScene === 'framedWall') {
-    lockTimer = setTimeout(() => {
-      for (const b of staticBricks) {
-        b.body.setBodyType(RAPIER.RigidBodyType.Fixed, true);
-      }
-      lockTimer = null;
-    }, 400);
-  }
 }
 
 function removeBall(ball) {
@@ -1019,6 +1009,7 @@ function throwBall(value) {
     .setMass(mass)
     .setFriction(0.42)
     .setRestitution(0.34)
+    .setCollisionGroups(BALL_COLLISION_GROUPS)
     .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
   const collider = world.createCollider(colliderDesc, body);
 
@@ -1428,7 +1419,8 @@ async function boot() {
     world.createCollider(
       RAPIER.ColliderDesc.cuboid(stand.width / 2, stand.thickness / 2, stand.depth / 2)
         .setFriction(0.9)
-        .setRestitution(0.04),
+        .setRestitution(0.04)
+        .setCollisionGroups(STAND_COLLISION_GROUPS),
       shelfBody,
     );
     standBodies.push({
@@ -1445,7 +1437,8 @@ async function boot() {
       world.createCollider(
         RAPIER.ColliderDesc.cuboid(stand.legWidth / 2, stand.legHeight / 2, stand.legDepth / 2)
           .setFriction(0.9)
-          .setRestitution(0.04),
+          .setRestitution(0.04)
+          .setCollisionGroups(STAND_COLLISION_GROUPS),
         legBody,
       );
       standBodies.push({
