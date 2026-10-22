@@ -19,7 +19,7 @@ const CONFIG = {
   backWall: { z: -6, width: 90, height: 24, thickness: 1 },
   brick: { w: 0.48, h: 0.106, d: 0.23, gap: 0.012, mass: 0.45 },
   ball: { radius: 0.16, mass: 4, minSpeed: 15, maxSpeed: 32, chargeTime: 1.0 },
-  camera: { height: 1.87, z: 4.6, fov: 72, pitch: 0.1 },
+  camera: { height: 3.12, z: 4.6, fov: 72, pitch: -0.7 * Math.PI / 180 },
   targetZ: -1.9,
   maxBalls: 14,
   ballLife: 9,
@@ -39,17 +39,17 @@ const BOMB_COLLISION_GROUPS = (BOMB_GROUP << 16) | 0xFFFF;
 const SCENES = {
   wall: { camera: { ...CONFIG.camera } },
   framedWall: { camera: { height: 1.9, z: 5.6, pitch: 0.1 } },
-  tower: { camera: { height: 2.2, z: 9.5, pitch: 0.1 } },
-  towerCans: { camera: { height: 2.2, z: 9.5, pitch: 0.1 } },
-  taper: { camera: { height: 1.8, z: 6.0, pitch: 0.08 } },
-  taperCans: { camera: { height: 1.8, z: 6.0, pitch: 0.08 } },
-  ring: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
+  tower: { camera: { height: 4.65, z: 7.05, pitch: 0.5 * Math.PI / 180 } },
+  towerCans: { camera: { height: 3.65, z: 7.9, pitch: 5.3 * Math.PI / 180 } },
+  taper: { camera: { height: 2, z: 5.4, pitch: 6.8 * Math.PI / 180 } },
+  taperCans: { camera: { height: 2.55, z: 5.75, pitch: 3.1 * Math.PI / 180 } },
+  ring: { camera: { height: 2.4, z: 4.1, pitch: 0.5 * Math.PI / 180 } },
   flat: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
-  cans: { camera: { height: 2.0, z: 6.2, pitch: 0.08 } },
-  canPyramid: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
-  brickPile: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
-  brickPillars: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
-  desk: { camera: { height: 1.9, z: 3.8, pitch: 0.08 } },
+  cans: { camera: { height: 2.9, z: 6.05, pitch: 4.6 * Math.PI / 180 } },
+  canPyramid: { camera: { x: 1.54, height: 2.06, z: 3.53, yaw: 12.7 * Math.PI / 180, pitch: -1.2 * Math.PI / 180, fov: 72 } },
+  brickPile: { camera: { x: 2.58, height: 2.47, z: 2.35, yaw: 30.5 * Math.PI / 180, pitch: -12.9 * Math.PI / 180, fov: 72 } },
+  brickPillars: { camera: { height: 1.2, z: 4.6, pitch: 0.08 } },
+  desk: { camera: { x: 0, height: 1.65, z: 3.35, yaw: 0, pitch: -4.8 * Math.PI / 180, fov: 72 } },
 };
 
 const GROUND_SCENES = new Set(['ring', 'flat', 'canPyramid', 'brickPile', 'brickPillars', 'desk']);
@@ -78,6 +78,14 @@ const toolButtonCanvas = document.getElementById('toolPreview');
 const toolItemCanvases = new Map(
   toolItems.map((item) => [item.dataset.projectile, item.querySelector('canvas')]),
 );
+const debugPanel = document.getElementById('debugPanel');
+const debugClose = document.getElementById('debugClose');
+const dbgX = document.getElementById('dbgX');
+const dbgY = document.getElementById('dbgY');
+const dbgZ = document.getElementById('dbgZ');
+const dbgYaw = document.getElementById('dbgYaw');
+const dbgPitch = document.getElementById('dbgPitch');
+const dbgAll = document.getElementById('dbgAll');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -453,6 +461,11 @@ const explosionGeo = new THREE.SphereGeometry(0.16, 16, 12);
 let towerBounds = null;
 let fallenCount = 0;
 let throwCount = 0;
+let debugCamera = false;
+let debugDragging = false;
+let debugSaved = null;
+let statsPressTimer = null;
+const debugKeys = new Set();
 
 function makeDotTexture() {
   const size = 64;
@@ -1530,7 +1543,7 @@ function spawnBricks() {
     createDenseBase(CONFIG.framedWall.cols - 2);
   } else {
     for (const spec of buildLayout()) createBrick(spec);
-    if (CONFIG.layout === 'wall' && CONFIG.wall.soldierBase) createSoldierBase();
+    if (CONFIG.layout === 'wall' && CONFIG.wall.soldierBase) createDenseBase();
   }
   settle();
   syncMeshes();
@@ -1820,7 +1833,7 @@ function updateBalls(dt) {
 }
 
 function beginCharge(clientX, clientY) {
-  if (!ready || !started || charging) return;
+  if (!ready || !started || debugCamera || charging) return;
   updateAimFromScreen(clientX, clientY);
   refreshThrowDir();
   charging = true;
@@ -1854,6 +1867,7 @@ function updateCharge() {
 
 function resetGame() {
   if (!started) return;
+  if (debugCamera) exitDebugCamera();
   cancelCharge();
   clearBalls();
   spawnBricks();
@@ -1862,13 +1876,83 @@ function resetGame() {
 }
 
 function applyCamera(spec) {
-  camera.position.set(0, spec.height, spec.z);
+  camera.position.set(spec.x ?? 0, spec.height, spec.z);
+  camera.rotation.y = spec.yaw ?? 0;
   camera.rotation.x = spec.pitch;
+  camera.fov = spec.fov ?? CONFIG.camera.fov;
+  camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
+}
+
+function updateDebugFields() {
+  const x = Number(camera.position.x.toFixed(2));
+  const y = Number(camera.position.y.toFixed(2));
+  const z = Number(camera.position.z.toFixed(2));
+  const yaw = Number(THREE.MathUtils.radToDeg(camera.rotation.y).toFixed(1));
+  const pitch = Number(THREE.MathUtils.radToDeg(camera.rotation.x).toFixed(1));
+  dbgX.value = x.toFixed(2);
+  dbgY.value = y.toFixed(2);
+  dbgZ.value = z.toFixed(2);
+  dbgYaw.value = yaw.toFixed(1);
+  dbgPitch.value = pitch.toFixed(1);
+  const all = JSON.stringify({ x, y, z, yaw, pitch, fov: camera.fov });
+  if (dbgAll.value !== all) dbgAll.value = all;
+}
+
+function enterDebugCamera() {
+  if (!started || debugCamera) return;
+  debugCamera = true;
+  debugSaved = {
+    position: camera.position.clone(),
+    rotation: camera.rotation.clone(),
+    fov: camera.fov,
+  };
+  cancelCharge();
+  aimRing.visible = false;
+  previewGeo.setDrawRange(0, 0);
+  debugPanel.hidden = false;
+  updateDebugFields();
+}
+
+function exitDebugCamera() {
+  if (!debugCamera) return;
+  debugCamera = false;
+  debugDragging = false;
+  debugKeys.clear();
+  debugPanel.hidden = true;
+  if (debugSaved) {
+    camera.position.copy(debugSaved.position);
+    camera.rotation.copy(debugSaved.rotation);
+    camera.fov = debugSaved.fov;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    debugSaved = null;
+  }
+}
+
+function updateDebugCamera(dt) {
+  const yaw = camera.rotation.y;
+  const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+  const move = new THREE.Vector3();
+
+  if (debugKeys.has('KeyW')) move.add(forward);
+  if (debugKeys.has('KeyS')) move.sub(forward);
+  if (debugKeys.has('KeyD')) move.add(right);
+  if (debugKeys.has('KeyA')) move.sub(right);
+  if (debugKeys.has('Space')) move.y += 1;
+  if (debugKeys.has('ShiftLeft') || debugKeys.has('ShiftRight')) move.y -= 1;
+
+  if (move.lengthSq() > 0) {
+    camera.position.addScaledVector(move.normalize(), 3 * dt);
+    camera.updateMatrixWorld();
+  }
+  updateDebugFields();
 }
 
 function goHome() {
   if (!started) return;
+  if (debugCamera) exitDebugCamera();
   cancelCharge();
   clearBalls();
   started = false;
@@ -1998,25 +2082,73 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   try {
     renderer.domElement.setPointerCapture(e.pointerId);
   } catch {}
+  if (debugCamera) {
+    debugDragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    return;
+  }
   beginCharge(e.clientX, e.clientY);
 });
 
 renderer.domElement.addEventListener('pointermove', (e) => {
   if (!started || !e.isPrimary) return;
+  if (debugCamera) {
+    if (!debugDragging) return;
+    const dx = e.clientX - lastMouseX;
+    const dy = e.clientY - lastMouseY;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    camera.rotation.y -= dx * 0.003;
+    camera.rotation.x = Math.max(-1.5, Math.min(1.5, camera.rotation.x - dy * 0.003));
+    camera.updateMatrixWorld();
+    updateDebugFields();
+    return;
+  }
   if (e.pointerType === 'touch' && !charging) return;
   updateAimFromScreen(e.clientX, e.clientY);
 });
 
 window.addEventListener('pointerup', (e) => {
   if (!e.isPrimary) return;
+  if (debugCamera) {
+    debugDragging = false;
+    return;
+  }
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   endCharge();
 });
 
 window.addEventListener('pointercancel', (e) => {
   if (!e.isPrimary) return;
+  if (debugCamera) {
+    debugDragging = false;
+    return;
+  }
   cancelCharge();
 });
+
+statsWrap.addEventListener('pointerdown', () => {
+  if (!started) return;
+  if (statsPressTimer) clearTimeout(statsPressTimer);
+  statsPressTimer = setTimeout(() => {
+    statsPressTimer = null;
+    if (debugCamera) exitDebugCamera();
+    else enterDebugCamera();
+  }, 600);
+});
+
+for (const eventName of ['pointerup', 'pointercancel', 'pointerleave']) {
+  statsWrap.addEventListener(eventName, () => {
+    if (statsPressTimer) {
+      clearTimeout(statsPressTimer);
+      statsPressTimer = null;
+    }
+  });
+}
+
+debugClose.addEventListener('click', exitDebugCamera);
+dbgAll.addEventListener('click', () => dbgAll.select());
 
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -2024,7 +2156,22 @@ window.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'r') resetGame();
 });
 
-window.addEventListener('blur', cancelCharge);
+window.addEventListener('keydown', (e) => {
+  if (!debugCamera) return;
+  if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+    debugKeys.add(e.code);
+    e.preventDefault();
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  debugKeys.delete(e.code);
+});
+
+window.addEventListener('blur', () => {
+  debugKeys.clear();
+  cancelCharge();
+});
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -2045,6 +2192,7 @@ function animate() {
   const dt = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
   updateCharge();
+  if (debugCamera) updateDebugCamera(dt);
   if (aimRing.visible) {
     aimRing.scale.setScalar(1 + Math.sin(now * 0.006) * 0.08);
   }
