@@ -80,6 +80,7 @@ const toolItemCanvases = new Map(
 );
 const debugPanel = document.getElementById('debugPanel');
 const debugClose = document.getElementById('debugClose');
+const debugFull = document.getElementById('debugFull');
 const dbgX = document.getElementById('dbgX');
 const dbgY = document.getElementById('dbgY');
 const dbgZ = document.getElementById('dbgZ');
@@ -1911,6 +1912,7 @@ function enterDebugCamera() {
   aimRing.visible = false;
   previewGeo.setDrawRange(0, 0);
   debugPanel.hidden = false;
+  document.body.classList.add('debugging');
   updateDebugFields();
 }
 
@@ -1920,6 +1922,7 @@ function exitDebugCamera() {
   debugDragging = false;
   debugKeys.clear();
   debugPanel.hidden = true;
+  document.body.classList.remove('debugging');
   if (debugSaved) {
     camera.position.copy(debugSaved.position);
     camera.rotation.copy(debugSaved.rotation);
@@ -2053,26 +2056,32 @@ document.addEventListener('pointerdown', (event) => {
   if (!toolWrap.contains(event.target)) toolWrap.classList.remove('open');
 });
 
-function updateFullscreenButton() {
-  fullBtn.textContent = document.fullscreenElement ? '退出全屏' : '全屏';
+function updateFullscreenButtons() {
+  const label = document.fullscreenElement ? '退出全屏' : '全屏';
+  fullBtn.textContent = label;
+  debugFull.textContent = label;
+}
+
+async function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 if (!document.documentElement.requestFullscreen) {
   fullBtn.hidden = true;
+  debugFull.hidden = true;
 } else {
-  fullBtn.addEventListener('click', async () => {
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else {
-        await document.documentElement.requestFullscreen();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  });
-  document.addEventListener('fullscreenchange', updateFullscreenButton);
-  updateFullscreenButton();
+  fullBtn.addEventListener('click', toggleFullscreen);
+  debugFull.addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', updateFullscreenButtons);
+  updateFullscreenButtons();
 }
 
 renderer.domElement.addEventListener('pointerdown', (e) => {
@@ -2149,6 +2158,19 @@ for (const eventName of ['pointerup', 'pointercancel', 'pointerleave']) {
 
 debugClose.addEventListener('click', exitDebugCamera);
 dbgAll.addEventListener('click', () => dbgAll.select());
+
+const debugMoveButtons = [...document.querySelectorAll('.debugMoveBtn')];
+for (const button of debugMoveButtons) {
+  const code = button.dataset.key;
+  button.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    debugKeys.add(code);
+  });
+  const release = () => debugKeys.delete(code);
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointercancel', release);
+  button.addEventListener('pointerleave', release);
+}
 
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 

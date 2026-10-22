@@ -150,12 +150,13 @@
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 8px; font-size: 10px; letter-spacing: 1px; color: #5b7690;
   }
-  #debugClose {
+  .debugHeaderBtns { display: flex; gap: 4px; }
+  #debugClose, #debugFull {
     appearance: none; -webkit-appearance: none; border: 0; border-radius: 7px;
     padding: 3px 7px; background: rgba(255, 255, 255, .6); color: #5b7690;
     font-family: inherit; font-size: 10px; cursor: pointer;
   }
-  #debugClose:hover { background: #fff; color: #24425c; }
+  #debugClose:hover, #debugFull:hover { background: #fff; color: #24425c; }
   .debugGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .debugGrid label {
     display: flex; align-items: center; gap: 4px; min-width: 0;
@@ -169,6 +170,34 @@
     font-family: inherit; font-size: 10px; color: #24425c;
   }
   #dbgAll { font-size: 9px; }
+  .debugPad, .debugLift {
+    position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 25;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .debugPad {
+    left: max(20px, env(safe-area-inset-left));
+    display: grid; grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(2, 48px); gap: 6px;
+  }
+  .debugLift {
+    right: max(20px, env(safe-area-inset-right));
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  body.debugging .debugPad, body.debugging .debugLift { opacity: 1; pointer-events: auto; }
+  body.debugging #statsWrap, body.debugging #toolWrap, body.debugging #sizePanel, body.debugging #powerWrap {
+    opacity: 0; pointer-events: none;
+  }
+  .debugPad button, .debugLift button {
+    width: 48px; height: 48px;
+    border: 1px solid rgba(140, 170, 200, .55); border-radius: 12px;
+    background: rgba(255, 255, 255, .72); backdrop-filter: blur(8px);
+    font-family: inherit; font-size: 13px; color: #5b7690; cursor: pointer;
+    touch-action: none; user-select: none;
+  }
+  .debugPad button:active, .debugLift button:active { background: #fff; color: #24425c; }
+  .debugPad .padW { grid-column: 2; grid-row: 1; }
+  .debugPad .padA { grid-column: 1; grid-row: 2; }
+  .debugPad .padS { grid-column: 2; grid-row: 2; }
+  .debugPad .padD { grid-column: 3; grid-row: 2; }
   .debugHelp { margin-top: 8px; font-size: 9px; line-height: 1.6; color: #7b95ad; }
 
   #overlay {
@@ -281,7 +310,10 @@
   <div id="debugPanel" class="glass" hidden>
     <div class="debugHeader">
       <span>DEBUG CAMERA</span>
-      <button id="debugClose" type="button">关闭</button>
+      <span class="debugHeaderBtns">
+        <button id="debugFull" type="button">全屏</button>
+        <button id="debugClose" type="button">关闭</button>
+      </span>
     </div>
     <div class="debugGrid">
       <label>X<input id="dbgX" readonly></label>
@@ -291,7 +323,19 @@
       <label>Pitch<input id="dbgPitch" readonly></label>
       <label class="debugAll">ALL<input id="dbgAll" readonly placeholder="camera params"></label>
     </div>
-    <p class="debugHelp">WASD 平移 · Space / Shift 升降 · 拖动鼠标转视角</p>
+    <p class="debugHelp">WASD / 左下按钮平移 · Space / Shift / 右下按钮升降 · 拖动鼠标转视角</p>
+  </div>
+
+  <div id="debugMovePad" class="debugPad">
+    <button class="debugMoveBtn padW" type="button" data-key="KeyW">W</button>
+    <button class="debugMoveBtn padA" type="button" data-key="KeyA">A</button>
+    <button class="debugMoveBtn padS" type="button" data-key="KeyS">S</button>
+    <button class="debugMoveBtn padD" type="button" data-key="KeyD">D</button>
+  </div>
+
+  <div id="debugLiftPad" class="debugLift">
+    <button class="debugMoveBtn" type="button" data-key="Space">升</button>
+    <button class="debugMoveBtn" type="button" data-key="ShiftLeft">降</button>
   </div>
 
   <div id="overlay">
