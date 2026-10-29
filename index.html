@@ -184,6 +184,8 @@
     display: flex; flex-direction: column; gap: 6px;
   }
   body.debugging .debugPad, body.debugging .debugLift { opacity: 1; pointer-events: auto; }
+  #debugPanel:not([hidden]) ~ .debugPad,
+  #debugPanel:not([hidden]) ~ .debugLift { opacity: 1; pointer-events: auto; }
   body.debugging #statsWrap, body.debugging #toolWrap, body.debugging #sizePanel, body.debugging #powerWrap {
     opacity: 0; pointer-events: none;
   }
@@ -403,6 +405,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/main.js?v=2"></script>
+  <script type="module" src="./src/main.js?v=3"></script>
 </body>
 </html>
