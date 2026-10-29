@@ -66,6 +66,7 @@ const powerPct = document.getElementById('powerPct');
 const fallenEl = document.getElementById('fallen');
 const totalEl = document.getElementById('total');
 const throwsEl = document.getElementById('throws');
+const peakEl = document.getElementById('peak');
 const resetBtn = document.getElementById('resetBtn');
 const homeBtn = document.getElementById('homeBtn');
 const sizeSlider = document.getElementById('sizeSlider');
@@ -466,6 +467,7 @@ const explosionGeo = new THREE.SphereGeometry(0.16, 16, 12);
 let towerBounds = null;
 let fallenCount = 0;
 let throwCount = 0;
+let peakHeight = 0;
 let debugCamera = false;
 let debugDragging = false;
 let debugSaved = null;
@@ -1560,6 +1562,8 @@ function spawnBricks() {
   setDefaultAim();
   fallenCount = 0;
   fallenEl.textContent = '0';
+  peakHeight = 0;
+  peakEl.textContent = '0.0';
   totalEl.textContent = String(bricks.length);
 }
 
@@ -1832,6 +1836,18 @@ function handleEvents() {
     const t = ball.body.translation();
     spawnParticles(t, 7);
   });
+}
+
+function updateScenePeak() {
+  let top = 0;
+  for (const b of bricks) {
+    const t = b.body.translation();
+    top = Math.max(top, t.y + b.hy);
+  }
+  if (Math.abs(top - peakHeight) >= 0.05) {
+    peakHeight = top;
+    peakEl.textContent = peakHeight.toFixed(1);
+  }
 }
 
 function updateBalls(dt) {
@@ -2329,6 +2345,7 @@ function animate() {
 
     syncMeshes();
     updateBricks();
+    updateScenePeak();
     updateBalls(dt);
     updateParticles(dt);
     updateExplosions(dt);
