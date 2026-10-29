@@ -87,6 +87,7 @@ const dbgZ = document.getElementById('dbgZ');
 const dbgYaw = document.getElementById('dbgYaw');
 const dbgPitch = document.getElementById('dbgPitch');
 const dbgAll = document.getElementById('dbgAll');
+const debugCopy = document.getElementById('debugCopy');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -2158,6 +2159,38 @@ for (const eventName of ['pointerup', 'pointercancel', 'pointerleave']) {
 
 debugClose.addEventListener('click', exitDebugCamera);
 dbgAll.addEventListener('click', () => dbgAll.select());
+
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {}
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    const ok = document.execCommand('copy');
+    area.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+debugCopy.addEventListener('click', async () => {
+  if (!dbgAll.value) return;
+  const ok = await copyText(dbgAll.value);
+  debugCopy.textContent = ok ? '已复制' : '失败';
+  setTimeout(() => {
+    debugCopy.textContent = '复制';
+  }, 900);
+});
 
 const debugMoveButtons = [...document.querySelectorAll('.debugMoveBtn')];
 for (const button of debugMoveButtons) {
