@@ -46,7 +46,7 @@ const SCENES = {
   ring: { camera: { height: 2.4, z: 4.1, pitch: 0.5 * Math.PI / 180 } },
   flat: { camera: { height: 2.0, z: 4.6, pitch: 0.08 } },
   cans: { camera: { height: 2.9, z: 6.05, pitch: 4.6 * Math.PI / 180 } },
-  canPyramid: { camera: { x: 1.54, height: 2.06, z: 3.53, yaw: 12.7 * Math.PI / 180, pitch: -1.2 * Math.PI / 180, fov: 72 } },
+  canPyramid: { camera: { x: 1.84, height: 2.36, z: 4.47, yaw: 18.6 * Math.PI / 180, pitch: -3.5 * Math.PI / 180, fov: 72 } },
   brickPile: { camera: { x: 2.58, height: 2.47, z: 2.35, yaw: 30.5 * Math.PI / 180, pitch: -12.9 * Math.PI / 180, fov: 72 } },
   brickPillars: { camera: { height: 1.2, z: 4.6, pitch: 0.08 } },
   desk: { camera: { x: 0, height: 1.65, z: 3.35, yaw: 0, pitch: -4.8 * Math.PI / 180, fov: 72 } },
@@ -1897,7 +1897,7 @@ function updateDebugFields() {
   dbgZ.value = z.toFixed(2);
   dbgYaw.value = yaw.toFixed(1);
   dbgPitch.value = pitch.toFixed(1);
-  const all = JSON.stringify({ x, y, z, yaw, pitch, fov: camera.fov });
+  const all = JSON.stringify({ scene: currentScene, x, y, z, yaw, pitch, fov: camera.fov });
   if (dbgAll.value !== all) dbgAll.value = all;
 }
 
