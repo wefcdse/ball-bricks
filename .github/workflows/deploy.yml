@@ -30,6 +30,12 @@ jobs:
           cp index.html dist/
           cp -r src vendor dist/
 
+      - name: Stamp cache-busting version
+        run: |
+          TS=$(date +%s)
+          sed -i -E "s#(src=\"\./src/main\.js\?v=)[^\"]*#\1${TS}#" dist/index.html
+          grep -n "main.js?v=" dist/index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

@@ -71,6 +71,9 @@ const homeBtn = document.getElementById('homeBtn');
 const sizeSlider = document.getElementById('sizeSlider');
 const sizeLabel = document.getElementById('sizeLabel');
 const fullBtn = document.getElementById('fullBtn');
+const fireModeBtn = document.getElementById('fireModeBtn');
+const fixedPowerSlider = document.getElementById('fixedPowerSlider');
+const fixedPowerValue = document.getElementById('fixedPowerValue');
 const toolWrap = document.getElementById('toolWrap');
 const toolBtn = document.getElementById('toolBtn');
 const toolItems = [...document.querySelectorAll('.toolItem')];
@@ -557,6 +560,11 @@ let chargeStart = 0;
 let power = 0;
 let ballRadius = CONFIG.ball.radius;
 let projectileType = 'ball';
+let fireMode = 'default';
+let autoFiring = false;
+let autoFireNext = 0;
+let fixedPower = 0.75;
+const AUTO_INTERVAL = 160;
 let bombStrength = 1;
 let bombRadius = 2;
 
@@ -625,7 +633,7 @@ function updateAimFromScreen(clientX, clientY) {
     aimNormal.copy(raycaster.ray.direction).negate();
   }
   placeAimRing();
-  if (charging) refreshThrowDir();
+  if (charging || fireMode !== 'default') refreshThrowDir();
 }
 
 function refreshThrowDir() {
@@ -1869,6 +1877,7 @@ function updateCharge() {
 
 function resetGame() {
   if (!started) return;
+  autoFiring = false;
   if (debugCamera) exitDebugCamera();
   cancelCharge();
   clearBalls();
@@ -1904,6 +1913,7 @@ function updateDebugFields() {
 function enterDebugCamera() {
   if (!started || debugCamera) return;
   debugCamera = true;
+  autoFiring = false;
   debugSaved = {
     position: camera.position.clone(),
     rotation: camera.rotation.clone(),
@@ -1956,6 +1966,7 @@ function updateDebugCamera(dt) {
 
 function goHome() {
   if (!started) return;
+  autoFiring = false;
   if (debugCamera) exitDebugCamera();
   cancelCharge();
   clearBalls();
@@ -2098,7 +2109,20 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     lastMouseY = e.clientY;
     return;
   }
-  beginCharge(e.clientX, e.clientY);
+  if (fireMode === 'default') {
+    beginCharge(e.clientX, e.clientY);
+    return;
+  }
+  if (!ready || !started) return;
+  updateAimFromScreen(e.clientX, e.clientY);
+  refreshThrowDir();
+  if (fireMode === 'single') {
+    throwBall(fixedPower);
+  } else {
+    autoFiring = true;
+    autoFireNext = performance.now() + AUTO_INTERVAL;
+    throwBall(fixedPower);
+  }
 });
 
 renderer.domElement.addEventListener('pointermove', (e) => {
@@ -2115,7 +2139,7 @@ renderer.domElement.addEventListener('pointermove', (e) => {
     updateDebugFields();
     return;
   }
-  if (e.pointerType === 'touch' && !charging) return;
+  if (fireMode === 'default' && e.pointerType === 'touch' && !charging) return;
   updateAimFromScreen(e.clientX, e.clientY);
 });
 
@@ -2126,6 +2150,10 @@ window.addEventListener('pointerup', (e) => {
     return;
   }
   if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (fireMode !== 'default') {
+    autoFiring = false;
+    return;
+  }
   endCharge();
 });
 
@@ -2135,6 +2163,7 @@ window.addEventListener('pointercancel', (e) => {
     debugDragging = false;
     return;
   }
+  autoFiring = false;
   cancelCharge();
 });
 
@@ -2205,6 +2234,33 @@ for (const button of debugMoveButtons) {
   button.addEventListener('pointerleave', release);
 }
 
+const fireModes = ['default', 'single', 'burst'];
+const fireModeLabels = { default: '默认', single: '单发', burst: '连发' };
+
+function updateFireMode() {
+  fireModeBtn.textContent = fireModeLabels[fireMode];
+  document.body.classList.toggle('fixed-fire', fireMode !== 'default');
+  if (fireMode !== 'burst') autoFiring = false;
+}
+
+function updateFixedPower() {
+  fixedPower = Number(fixedPowerSlider.value) / 100;
+  fixedPowerValue.textContent = fixedPowerSlider.value;
+}
+
+fixedPowerSlider.addEventListener('input', updateFixedPower);
+updateFixedPower();
+
+fireModeBtn.addEventListener('click', () => {
+  cancelCharge();
+  autoFiring = false;
+  const index = fireModes.indexOf(fireMode);
+  fireMode = fireModes[(index + 1) % fireModes.length];
+  updateFireMode();
+});
+
+updateFireMode();
+
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('keydown', (e) => {
@@ -2225,6 +2281,7 @@ window.addEventListener('keyup', (e) => {
 
 window.addEventListener('blur', () => {
   debugKeys.clear();
+  autoFiring = false;
   cancelCharge();
 });
 
@@ -2247,6 +2304,13 @@ function animate() {
   const dt = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
   updateCharge();
+  if (autoFiring && fireMode === 'burst' && started && !debugCamera) {
+    while (now >= autoFireNext) {
+      throwBall(fixedPower);
+      autoFireNext += AUTO_INTERVAL;
+      if (autoFireNext < now - AUTO_INTERVAL) autoFireNext = now + AUTO_INTERVAL;
+    }
+  }
   if (debugCamera) updateDebugCamera(dt);
   if (aimRing.visible) {
     aimRing.scale.setScalar(1 + Math.sin(now * 0.006) * 0.08);
